@@ -15,7 +15,9 @@ auth:
   # Generate a long random string, e.g.: openssl rand -hex 48
   jwt_secret: "REPLACE_WITH_RANDOM_SECRET"
   cookie_name: "cw_auth"
-  cookie_secure: false
+  # Set true whenever the app is served over https (which it should be in
+  # any real deployment). Only use false for local development over http.
+  cookie_secure: true
   cookie_domain: ""
 
 app:

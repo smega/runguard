@@ -141,25 +141,31 @@ func main() {
 		c.Next()
 	})
 
-	// Public heartbeat endpoint (no auth)
-	r.GET("/hb/:key", app.handleHeartbeat)
-	r.POST("/hb/:key", app.handleHeartbeat)
+	// Public heartbeat endpoint (no auth).
+	// Rate limited two ways: a generous per-IP cap (so one host running many
+	// jobs isn't penalized) and a tighter per-key cap (so a single job key
+	// can't be flooded/guessed regardless of source IP).
+	heartbeatByIP := rateLimitByIP(120, 120)
+	heartbeatByKey := rateLimitByParam("key", 20, 5)
+	r.GET("/hb/:key", heartbeatByIP, heartbeatByKey, app.handleHeartbeat)
+	r.POST("/hb/:key", heartbeatByIP, heartbeatByKey, app.handleHeartbeat)
 
 	api := r.Group("/api")
 
-	// Auth routes
+	// Auth routes. Rate limited per-IP since these are the endpoints most
+	// exposed to brute-force/credential-stuffing and email-bombing abuse.
 	auth := api.Group("/auth")
 	{
-		auth.POST("/signup", app.handleSignup)
-		auth.POST("/login", app.handleLogin)
+		auth.POST("/signup", rateLimitByIP(5, 5), app.handleSignup)
+		auth.POST("/login", rateLimitByIP(10, 10), app.handleLogin)
 		auth.POST("/logout", app.handleLogout)
 		auth.GET("/me", app.authMiddleware(), app.handleMe)
 
-		auth.POST("/magic/request", app.handleMagicRequest)
-		auth.POST("/magic/consume", app.handleMagicConsume)
+		auth.POST("/magic/request", rateLimitByIP(5, 5), app.handleMagicRequest)
+		auth.POST("/magic/consume", rateLimitByIP(10, 10), app.handleMagicConsume)
 
-		auth.POST("/password/reset/request", app.handlePasswordResetRequest)
-		auth.POST("/password/reset/confirm", app.handlePasswordResetConfirm)
+		auth.POST("/password/reset/request", rateLimitByIP(5, 5), app.handlePasswordResetRequest)
+		auth.POST("/password/reset/confirm", rateLimitByIP(10, 10), app.handlePasswordResetConfirm)
 	}
 
 	account := api.Group("/account").Use(app.authMiddleware())
