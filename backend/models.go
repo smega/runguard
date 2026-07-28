@@ -116,7 +116,17 @@ type Job struct {
 	PublicEnabled        bool               `bson:"publicEnabled,omitempty" json:"publicEnabled"`
 	Severity             string             `bson:"severity,omitempty" json:"severity,omitempty"`
 	MaintenanceUntil     *time.Time         `bson:"maintenance_until,omitempty" json:"maintenance_until,omitempty"`
-	WebhookURL           string             `bson:"webhook_url,omitempty" json:"webhook_url,omitempty"`
+	// MaintenanceMode selects how a silence window ends, beyond the plain
+	// fixed-duration window that MaintenanceUntil alone represents:
+	//   ""              - legacy/default fixed-duration window (or no
+	//                      silence at all, if MaintenanceUntil is unset).
+	//   "until_success"  - silenced regardless of MaintenanceUntil; cleared
+	//                      automatically the next time an "ok" heartbeat
+	//                      arrives (see handleHeartbeat).
+	//   "manual"         - silenced indefinitely until the user explicitly
+	//                      clears it; nothing auto-expires it.
+	MaintenanceMode string `bson:"maintenance_mode,omitempty" json:"maintenance_mode,omitempty"`
+	WebhookURL      string `bson:"webhook_url,omitempty" json:"webhook_url,omitempty"`
 
 	// CronExpr, when set, switches this job from plain interval+grace
 	// checking to a standard 5-field cron expression ("0 3 * * *"). See

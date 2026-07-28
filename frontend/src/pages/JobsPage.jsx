@@ -178,6 +178,9 @@ export default function JobsPage({ user }) {
   }, [selectedJobId]);
 
   const isJobSilenced = (job) => {
+    if (job.maintenance_mode === "until_success" || job.maintenance_mode === "manual") {
+      return true;
+    }
     const raw = job.maintenance_until || job.maintenanceUntil;
     if (!raw) return false;
     const until = new Date(raw);
@@ -473,7 +476,10 @@ export default function JobsPage({ user }) {
   const handleSetMaintenance = async (job, minutes) => {
     setJobError("");
 
-    const payload = {};
+    // Picking a fixed-duration preset (including "Off") always switches the
+    // job back to plain duration-based silence, overriding either of the
+    // two indefinite freeze modes if one was active.
+    const payload = { maintenance_mode: "duration" };
     let newMaintenance = null;
 
     if (minutes <= 0) {
@@ -492,6 +498,7 @@ export default function JobsPage({ user }) {
       const baseJob = res.job || job;
       const updatedJob = {
         ...baseJob,
+        maintenance_mode: "",
         maintenance_until: newMaintenance,
       };
 
@@ -506,6 +513,36 @@ export default function JobsPage({ user }) {
       console.error(err);
       setJobError(err.message || "Failed to update maintenance window.");
       pushToast("error", err.message || "Failed to update maintenance window.");
+    }
+  };
+
+  // "until_success" (auto-clears on the job's next ok heartbeat) or
+  // "manual" (silenced indefinitely until explicitly cleared via the "Off"
+  // preset above). Both are indefinite -- no maintenance_until timestamp.
+  const handleSetMaintenanceMode = async (job, mode) => {
+    setJobError("");
+    try {
+      const res = await updateJob(job.id, { maintenance_mode: mode });
+      const baseJob = res.job || job;
+      const updatedJob = {
+        ...baseJob,
+        maintenance_mode: mode,
+        maintenance_until: null,
+      };
+      setJobs((prev) => prev.map((j) => (j.id === job.id ? updatedJob : j)));
+      if (detailJob && detailJob.id === job.id) {
+        setDetailJob(updatedJob);
+      }
+      pushToast(
+        "success",
+        mode === "until_success"
+          ? "Silenced until the next successful heartbeat."
+          : "Silenced until manually unmuted."
+      );
+    } catch (err) {
+      console.error(err);
+      setJobError(err.message || "Failed to update maintenance mode.");
+      pushToast("error", err.message || "Failed to update maintenance mode.");
     }
   };
 
@@ -1324,10 +1361,18 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                               {formatTimestamp(job.last_alert_sent_at)}
                             </div>
                           )}
-                          {jobSilenced && rawJobMaintenance && (
+                          {jobSilenced && (
                             <div class="text-[10px] text-slate-500">
-                              Silenced until{" "}
-                              {formatShortDateTime(rawJobMaintenance)}
+                              {job.maintenance_mode === "until_success"
+                                ? "Silenced until next success"
+                                : job.maintenance_mode === "manual"
+                                ? "Silenced until unmuted"
+                                : rawJobMaintenance && (
+                                    <>
+                                      Silenced until{" "}
+                                      {formatShortDateTime(rawJobMaintenance)}
+                                    </>
+                                  )}
                             </div>
                           )}
                         </td>
@@ -1710,12 +1755,19 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                   const now = new Date();
                   const rawMaintenance =
                     detailJob.maintenance_until || detailJob.maintenanceUntil;
+                  const mode = detailJob.maintenance_mode || "";
 
                   let silenced = false;
                   let label = "No active maintenance window.";
                   let activeMinutes = 0;
 
-                  if (rawMaintenance) {
+                  if (mode === "until_success") {
+                    silenced = true;
+                    label = "Alerts silenced until the next successful heartbeat.";
+                  } else if (mode === "manual") {
+                    silenced = true;
+                    label = "Alerts silenced until manually unmuted.";
+                  } else if (rawMaintenance) {
                     const until = new Date(rawMaintenance);
                     if (!isNaN(until.getTime()) && until > now) {
                       silenced = true;
@@ -1741,6 +1793,7 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                   ];
 
                   const isPresetActive = (opt) => {
+                    if (mode === "until_success" || mode === "manual") return false;
                     if (opt.minutes === 0) {
                       return !silenced;
                     }
@@ -1748,6 +1801,11 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                     const diff = Math.abs(activeMinutes - opt.minutes);
                     return diff <= 10;
                   };
+
+                  const modeOptions = [
+                    { key: "until_success", label: "Until next success" },
+                    { key: "manual", label: "Until unmuted" },
+                  ];
 
                   return (
                     <div class="bg-white border border-slate-200 rounded-lg p-2.5">
@@ -1773,24 +1831,54 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                         recorded.
                       </p>
                       <p class="text-[10px] text-slate-600 mb-2">{label}</p>
-                      <div class="inline-flex rounded-full bg-slate-100 p-1">
-                        {maintenancePresets.map((opt) => (
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <div class="inline-flex rounded-full bg-slate-100 p-1">
+                          {maintenancePresets.map((opt) => (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              onClick={() =>
+                                handleSetMaintenance(detailJob, opt.minutes)
+                              }
+                              class={
+                                "px-2 py-0.5 rounded-full text-[10px] " +
+                                (isPresetActive(opt)
+                                  ? "bg-white text-slate-900 shadow-sm"
+                                  : "text-slate-500 hover:text-slate-800")
+                              }
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div class="inline-flex rounded-full bg-slate-100 p-1">
+                          {modeOptions.map((opt) => (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              onClick={() =>
+                                handleSetMaintenanceMode(detailJob, opt.key)
+                              }
+                              class={
+                                "px-2 py-0.5 rounded-full text-[10px] " +
+                                (mode === opt.key
+                                  ? "bg-white text-slate-900 shadow-sm"
+                                  : "text-slate-500 hover:text-slate-800")
+                              }
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                        {silenced && (
                           <button
-                            key={opt.key}
                             type="button"
-                            onClick={() =>
-                              handleSetMaintenance(detailJob, opt.minutes)
-                            }
-                            class={
-                              "px-2 py-0.5 rounded-full text-[10px] " +
-                              (isPresetActive(opt)
-                                ? "bg-white text-slate-900 shadow-sm"
-                                : "text-slate-500 hover:text-slate-800")
-                            }
+                            onClick={() => handleSetMaintenance(detailJob, 0)}
+                            class="px-2 py-0.5 rounded-full text-[10px] border border-amber-300 text-amber-800 hover:bg-amber-50"
                           >
-                            {opt.label}
+                            Unmute now
                           </button>
-                        ))}
+                        )}
                       </div>
                     </div>
                   );

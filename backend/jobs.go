@@ -49,9 +49,44 @@ type updateJobRequest struct {
 	Severity            *string  `json:"severity"`
 	MaintenanceMinutes  *int64   `json:"maintenance_minutes"`
 	MaintenanceUntil    *string  `json:"maintenance_until"` // ISO8601 string or "" to clear
+	// MaintenanceMode: nil = leave untouched, "" or "duration" = plain
+	// fixed-duration window (driven by MaintenanceMinutes/MaintenanceUntil
+	// above), "until_success" = silence until the next successful
+	// heartbeat, "manual" = silence indefinitely until explicitly cleared.
+	MaintenanceMode *string `json:"maintenance_mode"`
 	// CronExpr: nil = leave untouched, "" = clear back to interval mode,
 	// non-empty = validate and set as the job's schedule.
 	CronExpr *string `json:"cron_expr,omitempty"`
+}
+
+const (
+	MaintenanceModeDuration     = ""
+	MaintenanceModeUntilSuccess = "until_success"
+	MaintenanceModeManual       = "manual"
+)
+
+func normalizeMaintenanceMode(raw string) (string, error) {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "", "duration":
+		return MaintenanceModeDuration, nil
+	case MaintenanceModeUntilSuccess:
+		return MaintenanceModeUntilSuccess, nil
+	case MaintenanceModeManual:
+		return MaintenanceModeManual, nil
+	default:
+		return "", fmt.Errorf("maintenance_mode must be one of: duration, until_success, manual")
+	}
+}
+
+// jobIsSilenced reports whether alerts should currently be suppressed for
+// this job -- true for the two indefinite freeze modes, or for a plain
+// fixed-duration window that hasn't expired yet.
+func jobIsSilenced(j *Job, now time.Time) bool {
+	switch j.MaintenanceMode {
+	case MaintenanceModeUntilSuccess, MaintenanceModeManual:
+		return true
+	}
+	return j.MaintenanceUntil != nil && !j.MaintenanceUntil.IsZero() && j.MaintenanceUntil.After(now)
 }
 
 type jobResponse struct {
@@ -75,6 +110,10 @@ type jobResponse struct {
 
 	PublicEnabled bool   `json:"publicEnabled"`
 	PublicToken   string `json:"publicToken,omitempty"`
+
+	Severity         string     `json:"severity,omitempty"`
+	MaintenanceUntil *time.Time `json:"maintenance_until,omitempty"`
+	MaintenanceMode  string     `json:"maintenance_mode,omitempty"`
 }
 
 type jobRunResponse struct {
@@ -303,6 +342,9 @@ func (a *App) handleCreateJob(c *gin.Context) {
 		AlertWebhookEnabled:  job.AlertWebhookEnabled,
 		LastAlertSentAt:      job.LastAlertSentAt,
 		AlertWebhookURLs:     job.AlertWebhookURLs,
+		Severity:             job.Severity,
+		MaintenanceUntil:     job.MaintenanceUntil,
+		MaintenanceMode:      job.MaintenanceMode,
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"job": resp})
@@ -365,6 +407,9 @@ func (a *App) handleListJobs(c *gin.Context) {
 			AlertWebhookURLs:     j.AlertWebhookURLs,
 			PublicEnabled:        j.PublicEnabled,
 			PublicToken:          j.PublicToken,
+			Severity:             j.Severity,
+			MaintenanceUntil:     j.MaintenanceUntil,
+			MaintenanceMode:      j.MaintenanceMode,
 		})
 	}
 
@@ -433,6 +478,9 @@ func (a *App) handleGetJob(c *gin.Context) {
 		AlertWebhookURLs:     job.AlertWebhookURLs,
 		PublicEnabled:        job.PublicEnabled,
 		PublicToken:          job.PublicToken,
+		Severity:             job.Severity,
+		MaintenanceUntil:     job.MaintenanceUntil,
+		MaintenanceMode:      job.MaintenanceMode,
 	}
 
 	c.JSON(http.StatusOK, gin.H{"job": resp})
@@ -661,6 +709,25 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 			update["maintenance_until"] = until
 		}
 	}
+	if req.MaintenanceMode != nil {
+		mode, err := normalizeMaintenanceMode(*req.MaintenanceMode)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		update["maintenance_mode"] = mode
+		// Switching into one of the indefinite modes makes any fixed
+		// MaintenanceUntil timestamp irrelevant (jobIsSilenced treats the
+		// mode as authoritative either way), but clear it too so the
+		// frontend doesn't show a stale "until <date>" alongside it. If the
+		// request also set MaintenanceMinutes/MaintenanceUntil explicitly in
+		// the same call, that still wins since it's applied above.
+		if mode != MaintenanceModeDuration {
+			if _, explicit := update["maintenance_until"]; !explicit {
+				update["maintenance_until"] = nil
+			}
+		}
+	}
 	if req.CronExpr != nil {
 		expr := strings.TrimSpace(*req.CronExpr)
 		if expr == "" {
@@ -715,6 +782,9 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 		AlertWebhookURLs:     job.AlertWebhookURLs,
 		PublicEnabled:        job.PublicEnabled,
 		PublicToken:          job.PublicToken,
+		Severity:             job.Severity,
+		MaintenanceUntil:     job.MaintenanceUntil,
+		MaintenanceMode:      job.MaintenanceMode,
 	}
 
 	c.JSON(http.StatusOK, gin.H{"job": resp})
@@ -816,21 +886,6 @@ func (a *App) handleHeartbeat(c *gin.Context) {
 
 	now := time.Now().UTC()
 
-	_, err = a.jobsColl.UpdateByID(ctx, job.ID, bson.M{
-		"$set": bson.M{
-			"last_heartbeat_at": now,
-			"updated_at":        now,
-		},
-		"$unset": bson.M{
-			"last_alert_sent_at": "",
-		},
-	})
-	if err != nil {
-		log.Printf("update last heartbeat: %v", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-
 	// derive run attributes
 	ts := now
 	if payload.Ts != nil {
@@ -840,6 +895,32 @@ func (a *App) handleHeartbeat(c *gin.Context) {
 	status := payload.Status
 	if status == "" {
 		status = "ok"
+	}
+
+	setFields := bson.M{
+		"last_heartbeat_at": now,
+		"updated_at":        now,
+	}
+	unsetFields := bson.M{
+		"last_alert_sent_at": "",
+	}
+
+	// A job frozen "until first success" exists precisely so nobody has to
+	// remember to manually unmute it once the underlying problem is fixed --
+	// the first "ok" heartbeat after the freeze clears it automatically.
+	if status == "ok" && job.MaintenanceMode == MaintenanceModeUntilSuccess {
+		unsetFields["maintenance_mode"] = ""
+		unsetFields["maintenance_until"] = ""
+	}
+
+	_, err = a.jobsColl.UpdateByID(ctx, job.ID, bson.M{
+		"$set":   setFields,
+		"$unset": unsetFields,
+	})
+	if err != nil {
+		log.Printf("update last heartbeat: %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
 	}
 
 	exitCode := 0

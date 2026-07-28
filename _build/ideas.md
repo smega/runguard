@@ -32,9 +32,12 @@ this replaces them). Tags:
 - `[DONE]` Cron-expression scheduling — jobs can be defined by a 5-field cron
   expression instead of a plain interval; lateness is computed against the
   actual next scheduled run.
-- `[BUILDING NOW]` Freeze until first success / freeze until manually
+- `[DONE]` Freeze until first success / freeze until manually
   unmuted — two new silence modes alongside the existing fixed-duration
-  window, useful for recovery storms and noisy deploys.
+  window, useful for recovery storms and noisy deploys. (Also fixed a
+  pre-existing bug found along the way: the jobs API response never
+  actually included `severity` or `maintenance_until`, so the severity
+  pill and "silenced" badge in the UI had no data to render.)
 - `[WORTH DOING]` Scheduled/recurring silence profiles ("mute every day
   00:00-01:00", "Mondays 06:00-08:00 for deploys") — real improvement over
   one-off silence windows, needs its own small scheduler. Good next-round

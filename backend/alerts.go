@@ -67,13 +67,24 @@ func (a *App) scanAndAlertLateJobs(ctx context.Context) error {
 			continue
 		}
 
-		// NEW: suppress alerts during maintenance window
-		if j.MaintenanceUntil != nil && !j.MaintenanceUntil.IsZero() && j.MaintenanceUntil.After(now) {
+		// Suppress alerts while silenced -- a plain fixed-duration
+		// maintenance window, or one of the two indefinite freeze modes
+		// (until the next success, or until manually unmuted).
+		if jobIsSilenced(&j, now) {
+			until := "manually unmuted"
+			switch j.MaintenanceMode {
+			case MaintenanceModeUntilSuccess:
+				until = "the next successful heartbeat"
+			case MaintenanceModeManual:
+				until = "manually unmuted"
+			default:
+				if j.MaintenanceUntil != nil {
+					until = j.MaintenanceUntil.UTC().Format(time.RFC3339)
+				}
+			}
 			log.Printf(
-				"[alerts] job %s (%s) is in maintenance until %s; skipping alerts",
-				j.ID.Hex(),
-				j.Name,
-				j.MaintenanceUntil.UTC().Format(time.RFC3339),
+				"[alerts] job %s (%s) is silenced until %s; skipping alerts",
+				j.ID.Hex(), j.Name, until,
 			)
 			continue
 		}
