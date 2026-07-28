@@ -5,6 +5,7 @@ import { Link } from "preact-router/match";
 import { me, logout } from "./api.js";
 
 import Navbar from "./components/NavBar.jsx";
+import { ToastHost } from "./components/Toast.jsx";
 import LandingPage from "./pages/LandingPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import SignupPage from "./pages/SignupPage.jsx";
@@ -45,6 +46,7 @@ export default function App() {
 
   return (
     <div class="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
+      <ToastHost />
       <Navbar user={user} onLogout={handleLogout} />
       <main class="flex-1">
         <Router>

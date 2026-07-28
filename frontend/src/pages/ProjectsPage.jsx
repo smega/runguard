@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { route } from "preact-router";
 import { createProject, deleteProject, listProjects } from "../api.js";
+import { showToast } from "../components/Toast.jsx";
 
 export default function ProjectsPage({ user }) {
   const [projects, setProjects] = useState([]);
@@ -29,8 +30,13 @@ export default function ProjectsPage({ user }) {
   }
 
   async function onDelete(project) {
-    if (!confirm(`Delete project ${project.name}?`)) return;
-    try { await deleteProject(project.id); await reload(); } catch (err) { setError(err.message || "Failed to delete project"); }
+    try {
+      await deleteProject(project.id);
+      await reload();
+      showToast(`Project "${project.name}" deleted.`, { type: "success" });
+    } catch (err) {
+      setError(err.message || "Failed to delete project");
+    }
   }
 
   if (!user) return null;
@@ -66,7 +72,7 @@ export default function ProjectsPage({ user }) {
                     <td class="px-4 py-3 text-slate-600">{project.environment || "—"}</td>
                     <td class="px-4 py-3 text-slate-600">{project.job_count}</td>
                     <td class="px-4 py-3 text-slate-600">{project.open_incidents}</td>
-                    <td class="px-4 py-3 text-right"><button onClick={() => onDelete(project)} class="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100">Delete</button></td>
+                    <td class="px-4 py-3 text-right"><button onClick={() => onDelete(project)} title="Deletes this project immediately. Blocked if it still has jobs assigned to it." class="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100">Delete</button></td>
                   </tr>
                 ))}
               </tbody>

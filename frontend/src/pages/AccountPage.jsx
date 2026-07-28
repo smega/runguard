@@ -1,6 +1,7 @@
 import { route } from "preact-router";
 import { useEffect, useState } from "preact/hooks";
 import { createCheckoutLink, createPortalLink, getAccount, getAgentToken, getBilling, logoutAllDevices, regenerateAgentToken, updateAccount } from "../api.js";
+import { showToast } from "../components/Toast.jsx";
 
 export default function AccountPage({ user, onLogout }) {
   const [account, setAccount] = useState(null);
@@ -110,15 +111,13 @@ export default function AccountPage({ user, onLogout }) {
   }
 
   async function handleRegenerateAgentToken() {
-    if (!window.confirm("Regenerate your agent token? Any CLI already using the current token will stop being able to register new jobs.")) {
-      return;
-    }
     setAgentTokenLoading(true);
     setAgentTokenError("");
     try {
       const res = await regenerateAgentToken();
       setAgentToken(res.agent_token || "");
       setAgentTokenVisible(true);
+      showToast("Agent token regenerated. Any CLI still using the previous token will need updating.", { type: "success" });
     } catch (err) {
       setAgentTokenError(err.message || "Failed to regenerate agent token");
     } finally {
@@ -244,11 +243,15 @@ export default function AccountPage({ user, onLogout }) {
             type="button"
             onClick={handleRegenerateAgentToken}
             disabled={agentTokenLoading}
+            title="Immediately invalidates the current token — any CLI still using it will need the new one."
             class="px-3 py-1.5 rounded-full border border-slate-300 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
           >
             Regenerate
           </button>
         </div>
+        <p class="text-[11px] text-slate-500">
+          Regenerating invalidates the current token immediately — any CLI still using it will start getting 401s from <code>register</code> until updated.
+        </p>
 
         <p class="text-[11px] text-slate-500">
           Example: <code>runguard register --token=YOUR_AGENT_TOKEN --name="orders sync" --interval=60</code>
