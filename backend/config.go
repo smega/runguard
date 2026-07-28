@@ -13,6 +13,7 @@ type BillingPlanConfig struct {
 	PortalURL       string `yaml:"portal_url" json:"portal_url"`
 	Highlight       bool   `yaml:"highlight" json:"highlight"`
 }
+
 // PlanConfig is the single source of truth for plan limits/features. It's
 // used both to enforce limits (job/project creation, feature gating) and to
 // describe plans to the frontend (pricing page, account page) — previously
