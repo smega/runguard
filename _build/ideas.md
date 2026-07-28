@@ -52,8 +52,9 @@ this replaces them). Tags:
 - `[DONE]` Webhook delivery retries with backoff (3 attempts).
 - `[DONE]` Slack template type (`{"text": ...}`).
 - `[DONE]` Discord template type (`{"content": ...}`, 2000-char trim).
-- `[BUILDING NOW]` PagerDuty (Events API v2) and Microsoft Teams template
-  types — same pattern as Slack/Discord.
+- `[DONE]` PagerDuty (Events API v2, routing key via a URL query param,
+  severity mapped, dedup_key per job — no resolve event yet) and Microsoft
+  Teams (classic MessageCard) template types.
 - `[WORTH DOING]` Custom webhook payload templates (Go `text/template`) —
   lets power users hit anything (OpsGenie, custom internal tools, etc.)
   without RunGuard building a dedicated formatter for each one. Worth doing

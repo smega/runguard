@@ -94,8 +94,8 @@ export default function WebhooksPage({ user }) {
       </h1>
       <p class="text-xs text-slate-500 mb-3">
         Define reusable webhook endpoints once, then attach them to individual
-        jobs on the Jobs page. Templates can target Slack, Discord, or general
-        JSON receivers.
+        jobs on the Jobs page. Templates can target Slack, Discord, PagerDuty,
+        Microsoft Teams, or general JSON receivers.
       </p>
 
       {/* Create template */}
@@ -141,6 +141,8 @@ export default function WebhooksPage({ user }) {
                 <option value="generic">Generic JSON</option>
                 <option value="slack">Slack (text payload)</option>
                 <option value="discord">Discord (content payload)</option>
+                <option value="pagerduty">PagerDuty (Events API v2)</option>
+                <option value="teams">Microsoft Teams (MessageCard)</option>
               </select>
             </div>
           </div>
@@ -190,6 +192,50 @@ export default function WebhooksPage({ user }) {
             </div>
           )}
 
+          {type === "pagerduty" && (
+            <div class="mt-2 text-[10px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p class="mb-1">
+                PagerDuty's Events API v2 has one fixed endpoint and expects
+                the destination "integration key" (routing key) in the
+                request body rather than the URL. Since templates here only
+                have one URL field, append it as a query parameter — paste:
+              </p>
+              <pre class="bg-white border border-slate-200 rounded px-2 py-1 font-mono text-[9px] whitespace-pre overflow-x-auto">
+{`https://events.pagerduty.com/v2/enqueue?routing_key=YOUR_INTEGRATION_KEY`}
+              </pre>
+              <p class="mt-1">
+                RunGuard reads the routing key back out of that query
+                parameter and sends an <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">event_action: "trigger"</code>{" "}
+                with the job's severity mapped onto PagerDuty's
+                critical/error/warning/info scale, and a{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">dedup_key</code>{" "}
+                per job so repeat alerts update the same incident instead of
+                opening a new one each time. There's no separate "resolve"
+                event yet — incidents need to be acknowledged/resolved in
+                PagerDuty itself.
+              </p>
+            </div>
+          )}
+
+          {type === "teams" && (
+            <div class="mt-2 text-[10px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p class="mb-1">
+                Uses the classic Microsoft Teams "Incoming Webhook" connector
+                card format:
+              </p>
+              <pre class="bg-white border border-slate-200 rounded px-2 py-1 font-mono text-[9px] whitespace-pre overflow-x-auto">
+{`{ "@type": "MessageCard", "text": "RunGuard: job 'nightly-report' is late." }`}
+              </pre>
+              <p class="mt-1">
+                Note: Microsoft has been migrating newer Teams channels
+                towards Power Automate workflow webhooks instead of classic
+                connectors — if a channel's webhook URL doesn't accept this
+                format, check whether it needs a workflow-based webhook
+                instead.
+              </p>
+            </div>
+          )}
+
           <div class="flex items-center justify-between mt-2">
             <button
               type="submit"
@@ -199,16 +245,9 @@ export default function WebhooksPage({ user }) {
               {saving ? "Saving…" : "Add template"}
             </button>
             <div class="text-[11px] text-slate-500">
-              Generic JSON templates receive the full RunGuard payload; Slack
-              and Discord templates receive a simplified message field (
-              <code class="font-mono text-[9px] bg-slate-50 border border-slate-200 rounded px-1 py-0.5">
-                text
-              </code>{" "}
-              /{" "}
-              <code class="font-mono text-[9px] bg-slate-50 border border-slate-200 rounded px-1 py-0.5">
-                content
-              </code>
-              ).
+              Generic JSON templates receive the full RunGuard payload; Slack,
+              Discord, PagerDuty, and Teams templates each get a payload
+              shaped for that receiver.
             </div>
           </div>
           {inlineMessage && (
@@ -265,6 +304,10 @@ export default function WebhooksPage({ user }) {
                       ? "Slack"
                       : tmpl.type === "discord"
                       ? "Discord"
+                      : tmpl.type === "pagerduty"
+                      ? "PagerDuty"
+                      : tmpl.type === "teams"
+                      ? "Teams"
                       : "Generic JSON";
                   const typeClasses =
                     "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border " +
@@ -272,6 +315,10 @@ export default function WebhooksPage({ user }) {
                       ? "bg-purple-50 border-purple-200 text-purple-700"
                       : tmpl.type === "discord"
                       ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                      : tmpl.type === "pagerduty"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                      : tmpl.type === "teams"
+                      ? "bg-blue-50 border-blue-200 text-blue-700"
                       : "bg-slate-50 border-slate-200 text-slate-600");
 
                   return (

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -202,6 +203,7 @@ func (a *App) sendJobLateWebhooks(ctx context.Context, u *User, j *Job, now time
 			"id":                j.ID.Hex(),
 			"name":              j.Name,
 			"status":            status,
+			"severity":          normalizeSeverity(j.Severity),
 			"last_heartbeat_at": j.LastHeartbeatAt,
 			"interval_seconds":  j.ExpectedIntervalSecs,
 			"grace_seconds":     j.GraceSecs,
@@ -242,8 +244,11 @@ func (a *App) sendJobWebhooksWithPayload(
 			}
 		}
 
-		// Build body based on template type (generic JSON vs Slack)
-		bodyBytes, err := buildWebhookBodyForType(tType, payload)
+		// Build body based on template type (generic JSON vs Slack/Discord/
+		// PagerDuty/Teams). PagerDuty needs the configured URL too, since its
+		// routing key travels as a query parameter on that URL rather than
+		// in a separate field.
+		bodyBytes, err := buildWebhookBodyForType(tType, payload, urlStr)
 		if err != nil {
 			lastErr = err
 
@@ -290,7 +295,7 @@ func (a *App) sendJobWebhooksWithPayload(
 }
 
 
-func buildWebhookBodyForType(tType string, payload map[string]interface{}) ([]byte, error) {
+func buildWebhookBodyForType(tType string, payload map[string]interface{}, urlStr string) ([]byte, error) {
 	switch strings.ToLower(tType) {
 	case WebhookTemplateTypeSlack:
 		// For Slack: focus on "text"
@@ -330,6 +335,87 @@ func buildWebhookBodyForType(tType string, payload map[string]interface{}) ([]by
 		}
 		body := map[string]interface{}{
 			"content": content,
+		}
+		return json.Marshal(body)
+
+	case WebhookTemplateTypePagerDuty:
+		// PagerDuty's Events API v2 has a single fixed endpoint
+		// (https://events.pagerduty.com/v2/enqueue) and identifies the
+		// destination service via a "routing key" that normally lives in
+		// the request body, not the URL. Since RunGuard's webhook template
+		// only has one URL field, the routing key is expected as a
+		// ?routing_key=... query parameter on that URL -- we parse it out
+		// here and post it in the body where PagerDuty actually expects it.
+		routingKey := ""
+		if parsed, err := url.Parse(urlStr); err == nil {
+			routingKey = parsed.Query().Get("routing_key")
+		}
+
+		summary := "RunGuard alert"
+		if v, ok := payload["text"].(string); ok && v != "" {
+			summary = v
+		}
+
+		source := "runguard"
+		sevWord := "warning"
+		dedupKey := ""
+		if jobMap, ok := payload["job"].(map[string]interface{}); ok {
+			if name, ok := jobMap["name"].(string); ok && name != "" {
+				source = name
+			}
+			if id, ok := jobMap["id"].(string); ok {
+				dedupKey = id
+			}
+			if sev, ok := jobMap["severity"].(string); ok {
+				switch sev {
+				case SeverityCritical:
+					sevWord = "critical"
+				case SeverityHigh:
+					sevWord = "error"
+				case SeverityLow:
+					sevWord = "info"
+				default:
+					sevWord = "warning"
+				}
+			}
+		}
+
+		body := map[string]interface{}{
+			"routing_key":  routingKey,
+			"event_action": "trigger",
+			"payload": map[string]interface{}{
+				"summary":  summary,
+				"source":   source,
+				"severity": sevWord,
+			},
+		}
+		// dedup_key ties repeated triggers for the same job to one PagerDuty
+		// incident instead of opening a new one on every check-loop pass.
+		if dedupKey != "" {
+			body["dedup_key"] = dedupKey
+		}
+		return json.Marshal(body)
+
+	case WebhookTemplateTypeTeams:
+		// Classic Microsoft Teams "Incoming Webhook" connector card format.
+		// Note: Microsoft has been migrating Teams towards Power Automate
+		// workflow webhooks for new connectors, but MessageCard is still
+		// what most existing Teams incoming webhooks accept.
+		var text string
+		if v, ok := payload["text"].(string); ok && v != "" {
+			text = v
+		} else {
+			b, err := json.Marshal(payload)
+			if err != nil {
+				return nil, err
+			}
+			text = string(b)
+		}
+		body := map[string]interface{}{
+			"@type":    "MessageCard",
+			"@context": "http://schema.org/extensions",
+			"summary":  "RunGuard alert",
+			"text":     text,
 		}
 		return json.Marshal(body)
 

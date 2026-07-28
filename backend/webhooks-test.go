@@ -72,6 +72,7 @@ func (a *App) handleTestJobWebhooks(c *gin.Context) {
 			"id":                job.ID.Hex(),
 			"name":              job.Name,
 			"status":            status, // ✅ use computed status here
+			"severity":          normalizeSeverity(job.Severity),
 			"last_heartbeat_at": job.LastHeartbeatAt,
 		},
 		"user": map[string]interface{}{
