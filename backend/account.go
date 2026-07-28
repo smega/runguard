@@ -10,27 +10,49 @@ import (
 )
 
 type updateAccountRequest struct {
-	SummaryEmailEnabled *bool `json:"summary_email_enabled,omitempty"`
-	SummaryHourUTC      *int  `json:"summary_hour_utc,omitempty"`
+	SummaryEmailEnabled  *bool `json:"summary_email_enabled,omitempty"`
+	SummaryHourUTC       *int  `json:"summary_hour_utc,omitempty"`
+	WeeklySummaryEnabled *bool `json:"weekly_summary_enabled,omitempty"`
 }
 type accountResponse struct {
-	Email               string       `json:"email"`
-	PlanID              string       `json:"plan_id"`
-	SummaryEmailEnabled bool         `json:"summary_email_enabled"`
-	SummaryHourUTC      int          `json:"summary_hour_utc"`
-	SummaryLastSentAt   *time.Time   `json:"summary_last_sent_at,omitempty"`
-	TrialEndsAt         *time.Time   `json:"trial_ends_at,omitempty"`
-	BillingStatus       string       `json:"billing_status"`
-	BillingCustomerID   string       `json:"billing_customer_id,omitempty"`
-	BillingSubscription string       `json:"billing_subscription_id,omitempty"`
-	Plan                PlanConfig   `json:"plan"`
-	PlanCatalog         []PlanConfig `json:"plan_catalog"`
-	IsAdmin             bool         `json:"is_admin"`
+	Email                   string       `json:"email"`
+	PlanID                  string       `json:"plan_id"`
+	SummaryEmailEnabled     bool         `json:"summary_email_enabled"`
+	SummaryHourUTC          int          `json:"summary_hour_utc"`
+	SummaryLastSentAt       *time.Time   `json:"summary_last_sent_at,omitempty"`
+	WeeklySummaryEnabled    bool         `json:"weekly_summary_enabled"`
+	WeeklySummaryLastSentAt *time.Time   `json:"weekly_summary_last_sent_at,omitempty"`
+	TrialEndsAt             *time.Time   `json:"trial_ends_at,omitempty"`
+	BillingStatus           string       `json:"billing_status"`
+	BillingCustomerID       string       `json:"billing_customer_id,omitempty"`
+	BillingSubscription     string       `json:"billing_subscription_id,omitempty"`
+	Plan                    PlanConfig   `json:"plan"`
+	PlanCatalog             []PlanConfig `json:"plan_catalog"`
+	IsAdmin                 bool         `json:"is_admin"`
+}
+
+func accountResponseFromUser(a *App, u *User) accountResponse {
+	return accountResponse{
+		Email:                   u.Email,
+		PlanID:                  u.Plan,
+		SummaryEmailEnabled:     u.SummaryEmailEnabled,
+		SummaryHourUTC:          u.SummaryHourUTC,
+		SummaryLastSentAt:       u.SummaryLastSentAt,
+		WeeklySummaryEnabled:    u.WeeklySummaryEnabled,
+		WeeklySummaryLastSentAt: u.WeeklySummaryLastSentAt,
+		TrialEndsAt:             u.TrialEndsAt,
+		BillingStatus:           effectiveBillingStatus(u),
+		BillingCustomerID:       u.BillingCustomerID,
+		BillingSubscription:     u.BillingSubscriptionID,
+		Plan:                    a.getPlanByID(u.Plan),
+		PlanCatalog:             a.cfg.Plans,
+		IsAdmin:                 u.IsAdmin,
+	}
 }
 
 func (a *App) handleGetAccount(c *gin.Context) {
 	u := c.MustGet("user").(*User)
-	c.JSON(http.StatusOK, accountResponse{Email: u.Email, PlanID: u.Plan, SummaryEmailEnabled: u.SummaryEmailEnabled, SummaryHourUTC: u.SummaryHourUTC, SummaryLastSentAt: u.SummaryLastSentAt, TrialEndsAt: u.TrialEndsAt, BillingStatus: effectiveBillingStatus(u), BillingCustomerID: u.BillingCustomerID, BillingSubscription: u.BillingSubscriptionID, Plan: a.getPlanByID(u.Plan), PlanCatalog: a.cfg.Plans, IsAdmin: u.IsAdmin})
+	c.JSON(http.StatusOK, accountResponseFromUser(a, u))
 }
 func (a *App) handleUpdateAccount(c *gin.Context) {
 	u, ok := currentUser(c)
@@ -57,6 +79,9 @@ func (a *App) handleUpdateAccount(c *gin.Context) {
 		}
 		update["summary_hour_utc"] = h
 	}
+	if req.WeeklySummaryEnabled != nil {
+		update["weekly_summary_enabled"] = *req.WeeklySummaryEnabled
+	}
 	if len(update) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
 		return
@@ -72,5 +97,5 @@ func (a *App) handleUpdateAccount(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reload user"})
 		return
 	}
-	c.JSON(http.StatusOK, accountResponse{Email: fresh.Email, PlanID: fresh.Plan, SummaryEmailEnabled: fresh.SummaryEmailEnabled, SummaryHourUTC: fresh.SummaryHourUTC, SummaryLastSentAt: fresh.SummaryLastSentAt, TrialEndsAt: fresh.TrialEndsAt, BillingStatus: effectiveBillingStatus(&fresh), BillingCustomerID: fresh.BillingCustomerID, BillingSubscription: fresh.BillingSubscriptionID, Plan: a.getPlanByID(fresh.Plan), PlanCatalog: a.cfg.Plans, IsAdmin: fresh.IsAdmin})
+	c.JSON(http.StatusOK, accountResponseFromUser(a, &fresh))
 }

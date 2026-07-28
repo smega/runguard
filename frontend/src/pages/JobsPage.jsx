@@ -28,6 +28,10 @@ const SEVERITY_OPTIONS = [
 // public read-only host
 const PUBLIC_BASE_URL = "https://runguard-public.smega.eu";
 
+// remembers the last job the user had open so re-visiting the page (or
+// reloading it) drops them back where they left off instead of a blank pane
+const LAST_JOB_KEY = "runguard:lastSelectedJobId";
+
 export default function JobsPage({ user }) {
   const [jobs, setJobs] = useState([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
@@ -54,6 +58,8 @@ export default function JobsPage({ user }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const [statusFilter, setStatusFilter] = useState("all");
+  const [severityFilter, setSeverityFilter] = useState("all");
+  const [silencedOnly, setSilencedOnly] = useState(false);
   const [togglingEmailId, setTogglingEmailId] = useState(null);
   const [togglingWebhookId, setTogglingWebhookId] = useState(null);
   const [togglingPublicId, setTogglingPublicId] = useState(null);
@@ -142,6 +148,41 @@ export default function JobsPage({ user }) {
 
     return () => clearInterval(id);
   }, [selectedJobId]);
+
+  // Restore the last-viewed job once, after the first successful job load
+  useEffect(() => {
+    if (selectedJobId || jobs.length === 0) return;
+    let lastId = "";
+    try {
+      lastId = window.localStorage.getItem(LAST_JOB_KEY) || "";
+    } catch {
+      lastId = "";
+    }
+    if (lastId && jobs.some((j) => j.id === lastId)) {
+      setSelectedJobId(lastId);
+      loadDetail(lastId);
+    }
+  }, [jobs]);
+
+  // Persist (or clear) the last-viewed job whenever the selection changes
+  useEffect(() => {
+    try {
+      if (selectedJobId) {
+        window.localStorage.setItem(LAST_JOB_KEY, selectedJobId);
+      } else {
+        window.localStorage.removeItem(LAST_JOB_KEY);
+      }
+    } catch {
+      // localStorage unavailable (private mode, etc.) — safe to ignore
+    }
+  }, [selectedJobId]);
+
+  const isJobSilenced = (job) => {
+    const raw = job.maintenance_until || job.maintenanceUntil;
+    if (!raw) return false;
+    const until = new Date(raw);
+    return !isNaN(until.getTime()) && until > new Date();
+  };
 
   // sync runbook state when detail job changes
   useEffect(() => {
@@ -871,10 +912,13 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
 
   if (!user) return null;
 
-  const filteredJobs =
-    statusFilter === "all"
-      ? jobs
-      : jobs.filter((j) => j.status === statusFilter);
+  const filteredJobs = jobs.filter((j) => {
+    if (statusFilter !== "all" && j.status !== statusFilter) return false;
+    if (severityFilter !== "all" && (j.severity || "normal") !== severityFilter)
+      return false;
+    if (silencedOnly && !isJobSilenced(j)) return false;
+    return true;
+  });
 
   const runSegments = buildRunSegments(detailRuns);
 
@@ -1122,6 +1166,52 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
           </div>
         </div>
 
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <div class="inline-flex rounded-full bg-slate-100 p-1">
+            {[{ key: "all", label: "Any severity" }, ...SEVERITY_OPTIONS].map(
+              (opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setSeverityFilter(opt.key)}
+                  class={
+                    "px-2.5 py-1 rounded-full text-[11px] " +
+                    (severityFilter === opt.key
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800")
+                  }
+                >
+                  {opt.label}
+                </button>
+              )
+            )}
+          </div>
+          <button
+            onClick={() => setSilencedOnly((prev) => !prev)}
+            class={
+              "px-2.5 py-1 rounded-full text-[11px] border " +
+              (silencedOnly
+                ? "bg-amber-50 border-amber-300 text-amber-800"
+                : "bg-white border-slate-200 text-slate-500 hover:text-slate-800")
+            }
+          >
+            Silenced only
+          </button>
+          {(statusFilter !== "all" ||
+            severityFilter !== "all" ||
+            silencedOnly) && (
+            <button
+              onClick={() => {
+                setStatusFilter("all");
+                setSeverityFilter("all");
+                setSilencedOnly(false);
+              }}
+              class="text-[11px] text-slate-400 hover:text-slate-700"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
         {jobError && (
           <div class="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
             {jobError}
@@ -1161,15 +1251,9 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
 
                     const emailBtnDisabled = emailBusy || !emailAllowed;
 
-                    let jobSilenced = false;
+                    const jobSilenced = isJobSilenced(job);
                     const rawJobMaintenance =
                       job.maintenance_until || job.maintenanceUntil;
-                    if (rawJobMaintenance) {
-                      const until = new Date(rawJobMaintenance);
-                      if (!isNaN(until.getTime()) && until > new Date()) {
-                        jobSilenced = true;
-                      }
-                    }
 
                     const lastWebhookStatus = job.last_webhook_status || null;
 
@@ -1711,6 +1795,33 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                     </div>
                   );
                 })()}
+
+                {/* Per-job run history export */}
+                {(!plan || plan.allow_exports) && (
+                  <div class="bg-white border border-slate-200 rounded-lg p-2.5">
+                    <h3 class="text-[11px] font-semibold text-slate-900 mb-1">
+                      Export run history
+                    </h3>
+                    <p class="text-[10px] text-slate-500 mb-2">
+                      Download this job's own run history (status, exit code,
+                      duration, tags) as CSV or Excel.
+                    </p>
+                    <div class="flex flex-wrap gap-2">
+                      <a
+                        href={`/api/jobs/${detailJob.id}/export/runs.csv`}
+                        class="px-3 py-1.5 rounded-full text-[11px] bg-slate-900 text-white hover:bg-slate-800"
+                      >
+                        Download CSV
+                      </a>
+                      <a
+                        href={`/api/jobs/${detailJob.id}/export/runs.xlsx`}
+                        class="px-3 py-1.5 rounded-full text-[11px] bg-slate-100 text-slate-900 border border-slate-200 hover:bg-slate-200"
+                      >
+                        Download Excel
+                      </a>
+                    </div>
+                  </div>
+                )}
 
                 {/* Runbook / notes */}
                 <div class="bg-white border border-slate-200 rounded-lg p-2.5">

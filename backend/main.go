@@ -137,6 +137,9 @@ func main() {
 	// start daily summary loop
 	go app.RunDailySummaryLoop()
 
+	// start weekly summary loop
+	go app.RunWeeklySummaryLoop()
+
 	// start trial-expiry loop
 	go app.RunTrialExpiryLoop()
 
@@ -284,6 +287,12 @@ func main() {
 		jobs.POST("/:id/test-webhooks", app.handleTestJobWebhooks)
 
 		jobs.GET("/:id/runs/:runID/webhooks", app.ListWebhookLogsForRun)
+
+		// Per-job run history export (same plan gate as the account-wide
+		// exports below). Nested under /export/ rather than alongside
+		// /runs/:runID to avoid sharing a path segment with that wildcard.
+		jobs.GET("/:id/export/runs.csv", app.handleExportJobRunsCSV)
+		jobs.GET("/:id/export/runs.xlsx", app.handleExportJobRunsExcel)
 	}
 
 	// Exports (authenticated, top-tier only via plan.AllowExports)

@@ -25,6 +25,11 @@ type OverviewStats struct {
 	IncidentCount24h int64                  `json:"incidentCount24h"`
 	LastIncidentAt   *time.Time             `json:"lastIncidentAt,omitempty"`
 	JobsNeedingAttn  []OverviewJobAttention `json:"jobsNeedingAttention"`
+	// CriticalAttnJobs counts jobs that are late/never-seen AND severity
+	// high or critical -- used for a small badge on the Jobs nav link so
+	// "something needs attention right now" is visible without opening the
+	// page.
+	CriticalAttnJobs int64 `json:"criticalAttnJobs"`
 }
 
 func (a *App) handleOverview(c *gin.Context) {
@@ -48,12 +53,13 @@ func (a *App) handleOverview(c *gin.Context) {
 	defer cur.Close(ctx)
 
 	var (
-		totalJobs     int64
-		okJobs        int64
-		lateJobs      int64
-		neverSeenJobs int64
-		jobIDs        []primitive.ObjectID
-		attnJobs      []OverviewJobAttention
+		totalJobs        int64
+		okJobs           int64
+		lateJobs         int64
+		neverSeenJobs    int64
+		criticalAttnJobs int64
+		jobIDs           []primitive.ObjectID
+		attnJobs         []OverviewJobAttention
 	)
 
 	for cur.Next(ctx) {
@@ -83,6 +89,11 @@ func (a *App) handleOverview(c *gin.Context) {
 				Status:          status,
 				LastHeartbeatAt: j.LastHeartbeatAt,
 			})
+
+			sev := normalizeSeverity(j.Severity)
+			if sev == SeverityHigh || sev == SeverityCritical {
+				criticalAttnJobs++
+			}
 		}
 	}
 
@@ -101,6 +112,7 @@ func (a *App) handleOverview(c *gin.Context) {
 			IncidentCount24h: 0,
 			LastIncidentAt:   nil,
 			JobsNeedingAttn:  []OverviewJobAttention{},
+			CriticalAttnJobs: 0,
 		})
 		return
 	}
@@ -142,5 +154,6 @@ func (a *App) handleOverview(c *gin.Context) {
 		IncidentCount24h: incidentCount24h,
 		LastIncidentAt:   lastIncidentAt,
 		JobsNeedingAttn:  attnJobs,
+		CriticalAttnJobs: criticalAttnJobs,
 	})
 }

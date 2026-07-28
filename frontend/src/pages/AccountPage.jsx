@@ -9,6 +9,7 @@ export default function AccountPage({ user, onLogout }) {
   const [loadingAccount, setLoadingAccount] = useState(true);
   const [accountError, setAccountError] = useState("");
   const [savingSummary, setSavingSummary] = useState(false);
+  const [savingWeeklySummary, setSavingWeeklySummary] = useState(false);
   const [billingBusy, setBillingBusy] = useState("");
   const [loggingOutAll, setLoggingOutAll] = useState(false);
   const [logoutAllMessage, setLogoutAllMessage] = useState("");
@@ -48,6 +49,20 @@ export default function AccountPage({ user, onLogout }) {
       setAccountError(err.message || "Failed to update account");
     } finally {
       setSavingSummary(false);
+    }
+  }
+
+  async function handleToggleWeeklySummary() {
+    if (!account) return;
+    setSavingWeeklySummary(true);
+    setAccountError("");
+    try {
+      const updated = await updateAccount({ weekly_summary_enabled: !account.weekly_summary_enabled });
+      setAccount(updated);
+    } catch (err) {
+      setAccountError(err.message || "Failed to update account");
+    } finally {
+      setSavingWeeklySummary(false);
     }
   }
 
@@ -207,6 +222,17 @@ export default function AccountPage({ user, onLogout }) {
             <p class="mt-1 text-xs text-slate-500">Sent around {typeof a.summary_hour_utc === "number" ? `${a.summary_hour_utc}:00 UTC` : "08:00 UTC"} to {a.email}.</p>
           </div>
           <button type="button" onClick={handleToggleSummary} disabled={savingSummary} class={(a.summary_email_enabled ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-slate-50 border-slate-200 text-slate-600") + " inline-flex items-center px-3 py-1.5 rounded-full text-[11px] border"}>{savingSummary ? "Saving…" : a.summary_email_enabled ? "Summary email on" : "Summary email off"}</button>
+        </div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Weekly summary email</p>
+            <p class="mt-1 text-sm text-slate-700">One email per week: uptime per job, the noisiest jobs, alert counts, and jobs created/deleted.</p>
+            <p class="mt-1 text-xs text-slate-500">Sent Mondays around {typeof a.summary_hour_utc === "number" ? `${a.summary_hour_utc}:00 UTC` : "08:00 UTC"} to {a.email}.</p>
+          </div>
+          <button type="button" onClick={handleToggleWeeklySummary} disabled={savingWeeklySummary} class={(a.weekly_summary_enabled ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-slate-50 border-slate-200 text-slate-600") + " inline-flex items-center px-3 py-1.5 rounded-full text-[11px] border"}>{savingWeeklySummary ? "Saving…" : a.weekly_summary_enabled ? "Weekly summary on" : "Weekly summary off"}</button>
         </div>
       </div>
 

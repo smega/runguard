@@ -1,13 +1,42 @@
 // src/components/Navbar.jsx
 import { h } from "preact";
+import { useEffect, useState } from "preact/hooks";
 import { Link } from "preact-router/match";
+import { getJson } from "../api.js";
 
 export default function Navbar({ user, onLogout }) {
   const userLabel = user?.email || "Account";
+  const [criticalAttnJobs, setCriticalAttnJobs] = useState(0);
 
   const handleLogoutClick = () => {
     if (onLogout) onLogout();
   };
+
+  // Small badge on the "Jobs" link so anything late/never-seen at high or
+  // critical severity is visible without opening the Jobs page. Polls
+  // gently in the background — no need for anything fancier here.
+  useEffect(() => {
+    if (!user) {
+      setCriticalAttnJobs(0);
+      return;
+    }
+    let cancelled = false;
+    const poll = () => {
+      getJson("/api/overview")
+        .then((data) => {
+          if (!cancelled) setCriticalAttnJobs(data?.criticalAttnJobs || 0);
+        })
+        .catch(() => {
+          // silent — a stale/missing badge isn't worth surfacing an error for
+        });
+    };
+    poll();
+    const id = setInterval(poll, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [user]);
 
   return (
     <header class="border-b border-slate-200 bg-white">
@@ -39,7 +68,17 @@ export default function Navbar({ user, onLogout }) {
           {user && (
             <>
               <Link href="/overview" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900">Overview</Link>
-              <Link href="/jobs" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900">Jobs</Link>
+              <Link href="/jobs" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900 inline-flex items-center gap-1">
+                Jobs
+                {criticalAttnJobs > 0 && (
+                  <span
+                    class="inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-600 text-white text-[10px] font-semibold leading-none"
+                    title={`${criticalAttnJobs} high/critical severity job${criticalAttnJobs === 1 ? "" : "s"} need attention`}
+                  >
+                    {criticalAttnJobs}
+                  </span>
+                )}
+              </Link>
               <Link href="/projects" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900">Projects</Link>
               <Link href="/incidents" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900">Incidents</Link>
               <Link href="/agent" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900">Agent</Link>

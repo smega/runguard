@@ -30,21 +30,23 @@ type User struct {
 	PasswordHash string             `bson:"password_hash" json:"-"`
 	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
 
-	Plan                  string     `bson:"plan,omitempty" json:"plan"`
-	SummaryEmailEnabled   bool       `bson:"summary_email_enabled,omitempty" json:"summary_email_enabled"`
-	SummaryHourUTC        int        `bson:"summary_hour_utc,omitempty" json:"summary_hour_utc"`
-	SummaryLastSentAt     *time.Time `bson:"summary_last_sent_at,omitempty" json:"summary_last_sent_at,omitempty"`
-	BillingProvider       string     `bson:"billing_provider,omitempty" json:"billing_provider,omitempty"`
-	BillingStatus         string     `bson:"billing_status,omitempty" json:"billing_status,omitempty"`
-	BillingCustomerID     string     `bson:"billing_customer_id,omitempty" json:"billing_customer_id,omitempty"`
-	BillingSubscriptionID string     `bson:"billing_subscription_id,omitempty" json:"billing_subscription_id,omitempty"`
-	BillingCheckoutPlanID string     `bson:"billing_checkout_plan_id,omitempty" json:"billing_checkout_plan_id,omitempty"`
-	BillingLastEventType  string     `bson:"billing_last_event_type,omitempty" json:"billing_last_event_type,omitempty"`
-	BillingLastEventAt    *time.Time `bson:"billing_last_event_at,omitempty" json:"billing_last_event_at,omitempty"`
-	BillingLastCheckoutAt *time.Time `bson:"billing_last_checkout_at,omitempty" json:"billing_last_checkout_at,omitempty"`
-	TrialEndsAt           *time.Time `bson:"trial_ends_at,omitempty" json:"trial_ends_at,omitempty"`
-	PaidPlanActivatedAt   *time.Time `bson:"paid_plan_activated_at,omitempty" json:"paid_plan_activated_at,omitempty"`
-	IsAdmin               bool       `bson:"is_admin,omitempty" json:"is_admin"`
+	Plan                    string     `bson:"plan,omitempty" json:"plan"`
+	SummaryEmailEnabled     bool       `bson:"summary_email_enabled,omitempty" json:"summary_email_enabled"`
+	SummaryHourUTC          int        `bson:"summary_hour_utc,omitempty" json:"summary_hour_utc"`
+	SummaryLastSentAt       *time.Time `bson:"summary_last_sent_at,omitempty" json:"summary_last_sent_at,omitempty"`
+	WeeklySummaryEnabled    bool       `bson:"weekly_summary_enabled,omitempty" json:"weekly_summary_enabled"`
+	WeeklySummaryLastSentAt *time.Time `bson:"weekly_summary_last_sent_at,omitempty" json:"weekly_summary_last_sent_at,omitempty"`
+	BillingProvider         string     `bson:"billing_provider,omitempty" json:"billing_provider,omitempty"`
+	BillingStatus           string     `bson:"billing_status,omitempty" json:"billing_status,omitempty"`
+	BillingCustomerID       string     `bson:"billing_customer_id,omitempty" json:"billing_customer_id,omitempty"`
+	BillingSubscriptionID   string     `bson:"billing_subscription_id,omitempty" json:"billing_subscription_id,omitempty"`
+	BillingCheckoutPlanID   string     `bson:"billing_checkout_plan_id,omitempty" json:"billing_checkout_plan_id,omitempty"`
+	BillingLastEventType    string     `bson:"billing_last_event_type,omitempty" json:"billing_last_event_type,omitempty"`
+	BillingLastEventAt      *time.Time `bson:"billing_last_event_at,omitempty" json:"billing_last_event_at,omitempty"`
+	BillingLastCheckoutAt   *time.Time `bson:"billing_last_checkout_at,omitempty" json:"billing_last_checkout_at,omitempty"`
+	TrialEndsAt             *time.Time `bson:"trial_ends_at,omitempty" json:"trial_ends_at,omitempty"`
+	PaidPlanActivatedAt     *time.Time `bson:"paid_plan_activated_at,omitempty" json:"paid_plan_activated_at,omitempty"`
+	IsAdmin                 bool       `bson:"is_admin,omitempty" json:"is_admin"`
 
 	// TokenVersion is embedded in issued JWTs. Bumping it (e.g. on password
 	// change or an explicit "log out everywhere") immediately invalidates

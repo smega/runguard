@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +17,8 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -307,4 +311,204 @@ func (a *App) handleExportJobsPDF(c *gin.Context) {
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Data(http.StatusOK, "application/pdf", buf.Bytes())
+}
+
+// ---------- Per-job run history export (CSV / XLSX) ----------
+//
+// Same idea as the account-wide jobs export above, but scoped to a single
+// job's run history instead of the job list -- "export this job's runs" for
+// someone debugging a specific job, rather than a snapshot of all jobs.
+// Reuses the same maxExportRows cap and AllowExports plan gate.
+
+type jobRunExportRow struct {
+	At           string
+	Status       string
+	ExitCode     string
+	DurationMs   int64
+	Env          string
+	Tags         string
+	AgentVersion string
+	LateBySec    int64
+}
+
+func (a *App) loadJobForExport(ctx context.Context, jobID string, u *User) (*Job, error) {
+	id, err := primitive.ObjectIDFromHex(jobID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid job id")
+	}
+	var job Job
+	err = a.jobsColl.FindOne(ctx, bson.M{
+		"_id":        id,
+		"user_id":    u.ID,
+		"deleted_at": bson.M{"$exists": false},
+	}).Decode(&job)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, fmt.Errorf("job not found")
+		}
+		return nil, err
+	}
+	return &job, nil
+}
+
+func (a *App) buildJobRunExportRows(ctx context.Context, jobID primitive.ObjectID) ([]jobRunExportRow, error) {
+	cur, err := a.jobRunsColl.Find(ctx, bson.M{"job_id": jobID},
+		options.Find().SetSort(bson.D{{Key: "at", Value: -1}}).SetLimit(maxExportRows))
+	if err != nil {
+		return nil, fmt.Errorf("find job runs for export: %w", err)
+	}
+	defer cur.Close(ctx)
+
+	var rows []jobRunExportRow
+	for cur.Next(ctx) {
+		var r JobRun
+		if err := cur.Decode(&r); err != nil {
+			log.Printf("export job runs decode: %v", err)
+			continue
+		}
+		exitCode := ""
+		if r.ExitCode != nil {
+			exitCode = fmt.Sprintf("%d", *r.ExitCode)
+		}
+		rows = append(rows, jobRunExportRow{
+			At:           r.At.UTC().Format(time.RFC3339),
+			Status:       r.Status,
+			ExitCode:     exitCode,
+			DurationMs:   r.DurationMs,
+			Env:          r.Env,
+			Tags:         strings.Join(r.Tags, ";"),
+			AgentVersion: r.AgentVersion,
+			LateBySec:    r.LateBySec,
+		})
+	}
+	if err := cur.Err(); err != nil {
+		return nil, fmt.Errorf("export job runs cursor: %w", err)
+	}
+	return rows, nil
+}
+
+// GET /api/jobs/:id/export/runs.csv
+func (a *App) handleExportJobRunsCSV(c *gin.Context) {
+	u := c.MustGet("user").(*User)
+	plan := a.getUserPlanFeatures(u)
+	if !plan.AllowExports {
+		c.JSON(http.StatusForbidden, gin.H{"error": "exports are only available on the top tier"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+
+	job, err := a.loadJobForExport(ctx, c.Param("id"), u)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	rows, err := a.buildJobRunExportRows(ctx, job.ID)
+	if err != nil {
+		log.Printf("export job runs csv: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build export"})
+		return
+	}
+
+	filename := fmt.Sprintf("runguard_%s_runs_%s.csv", safeFilenamePart(job.Name), time.Now().UTC().Format("20060102"))
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	w := csv.NewWriter(c.Writer)
+	_ = w.Write([]string{"At", "Status", "ExitCode", "DurationMs", "Env", "Tags", "AgentVersion", "LateBySeconds"})
+	for _, r := range rows {
+		_ = w.Write([]string{
+			r.At, r.Status, r.ExitCode,
+			fmt.Sprintf("%d", r.DurationMs),
+			r.Env, r.Tags, r.AgentVersion,
+			fmt.Sprintf("%d", r.LateBySec),
+		})
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		log.Printf("export job runs csv flush: %v", err)
+	}
+}
+
+// GET /api/jobs/:id/export/runs.xlsx
+func (a *App) handleExportJobRunsExcel(c *gin.Context) {
+	u := c.MustGet("user").(*User)
+	plan := a.getUserPlanFeatures(u)
+	if !plan.AllowExports {
+		c.JSON(http.StatusForbidden, gin.H{"error": "exports are only available on the top tier"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+
+	job, err := a.loadJobForExport(ctx, c.Param("id"), u)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	rows, err := a.buildJobRunExportRows(ctx, job.ID)
+	if err != nil {
+		log.Printf("export job runs xlsx: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build export"})
+		return
+	}
+
+	f := excelize.NewFile()
+	sheet := f.GetSheetName(f.GetActiveSheetIndex())
+
+	headers := []string{"At", "Status", "ExitCode", "DurationMs", "Env", "Tags", "AgentVersion", "LateBySeconds"}
+	for i, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		_ = f.SetCellValue(sheet, cell, h)
+	}
+
+	for rowIdx, r := range rows {
+		excelRow := rowIdx + 2
+		values := []interface{}{r.At, r.Status, r.ExitCode, r.DurationMs, r.Env, r.Tags, r.AgentVersion, r.LateBySec}
+		for colIdx, v := range values {
+			cell, _ := excelize.CoordinatesToCellName(colIdx+1, excelRow)
+			_ = f.SetCellValue(sheet, cell, v)
+		}
+	}
+
+	buf, err := f.WriteToBuffer()
+	if err != nil {
+		log.Printf("export job runs xlsx write buffer: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to render excel"})
+		return
+	}
+
+	filename := fmt.Sprintf("runguard_%s_runs_%s.xlsx", safeFilenamePart(job.Name), time.Now().UTC().Format("20060102"))
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf.Bytes())
+}
+
+// safeFilenamePart turns a job name into something safe to drop into a
+// Content-Disposition filename -- alphanumeric plus a few separators, capped
+// in length, never empty.
+func safeFilenamePart(name string) string {
+	var sb strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			sb.WriteRune(r)
+		case r == '-' || r == '_':
+			sb.WriteRune(r)
+		case r == ' ':
+			sb.WriteRune('_')
+		}
+	}
+	out := sb.String()
+	if len(out) > 40 {
+		out = out[:40]
+	}
+	if out == "" {
+		out = "job"
+	}
+	return out
 }
