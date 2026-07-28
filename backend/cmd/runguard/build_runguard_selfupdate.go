@@ -1,7 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -30,11 +30,11 @@ type versionsAPIResponse struct {
 	Nightly      string   `json:"nightly"`
 	Versions     []string `json:"versions"`
 
-	Arch      string `json:"arch"`
-	Channel   string `json:"channel"`
-	Version   string `json:"version"`
-	BinaryURL string `json:"binary"`
-	BinaryMD5 string `json:"binary_md5"`
+	Arch         string `json:"arch"`
+	Channel      string `json:"channel"`
+	Version      string `json:"version"`
+	BinaryURL    string `json:"binary"`
+	BinarySHA256 string `json:"binary_sha256"`
 }
 
 func SelfUpdate(args []string) error {
@@ -57,7 +57,7 @@ func SelfUpdate(args []string) error {
 	targetVersion := strings.TrimSpace(*versionFlag)
 	var downloadBase string
 	var binaryURL string
-	var md5URL string
+	var sha256URL string
 
 	if targetVersion == "" {
 		// Use channel + arch to pick version + binary
@@ -82,9 +82,9 @@ func SelfUpdate(args []string) error {
 
 		if resp.BinaryURL != "" && *baseURLFlag == "" {
 			binaryURL = resp.BinaryURL
-			md5URL = resp.BinaryMD5
+			sha256URL = resp.BinarySHA256
 		} else {
-			binaryURL, md5URL = composeBinaryURL(downloadBase, goos, goarch, targetVersion)
+			binaryURL, sha256URL = composeBinaryURL(downloadBase, goos, goarch, targetVersion)
 		}
 	} else {
 		// explicit version; only use base URL info
@@ -93,7 +93,7 @@ func SelfUpdate(args []string) error {
 		} else {
 			downloadBase = strings.TrimRight(defaultDownloadBase, "/")
 		}
-		binaryURL, md5URL = composeBinaryURL(downloadBase, goos, goarch, targetVersion)
+		binaryURL, sha256URL = composeBinaryURL(downloadBase, goos, goarch, targetVersion)
 	}
 
 	if Version != "" && Version == targetVersion {
@@ -133,15 +133,16 @@ func SelfUpdate(args []string) error {
 		return fmt.Errorf("chmod failed: %w", err)
 	}
 
-	// Optional MD5 verification
-	if md5URL != "" {
-		if err := verifyMD5(md5URL, tmpPath); err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: MD5 verification failed: %v\n", err)
-			// non-fatal, continue
-		} else {
-			fmt.Println("    MD5 checksum OK.")
-		}
+	// SHA256 verification. Unlike the old MD5 check, this is fatal on
+	// mismatch — a checksum you don't actually enforce isn't protecting
+	// against anything, it's just a log line.
+	if sha256URL == "" {
+		return fmt.Errorf("refusing to install: no checksum URL available for this release")
 	}
+	if err := verifySHA256(sha256URL, tmpPath); err != nil {
+		return fmt.Errorf("checksum verification failed, aborting update: %w", err)
+	}
+	fmt.Println("    SHA256 checksum OK.")
 
 	// Replace binary
 	if err := os.Rename(tmpPath, exePath); err != nil {
@@ -191,7 +192,7 @@ func composeBinaryURL(downloadBase, goos, goarch, version string) (string, strin
 	base := strings.TrimRight(downloadBase, "/")
 	bin := fmt.Sprintf("runguard-%s-%s-%s", goos, goarch, version)
 	url := base + "/" + version + "/" + bin
-	return url, url + ".md5"
+	return url, url + ".sha256"
 }
 
 func httpDownload(url string, w io.Writer) error {
@@ -208,15 +209,15 @@ func httpDownload(url string, w io.Writer) error {
 	return err
 }
 
-func verifyMD5(md5URL, filePath string) error {
-	resp, err := http.Get(md5URL) // #nosec G107
+func verifySHA256(sha256URL, filePath string) error {
+	resp, err := http.Get(sha256URL) // #nosec G107
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("md5 URL returned %d", resp.StatusCode)
+		return fmt.Errorf("sha256 URL returned %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 	if err != nil {
@@ -224,7 +225,7 @@ func verifyMD5(md5URL, filePath string) error {
 	}
 	fields := strings.Fields(string(body))
 	if len(fields) == 0 {
-		return fmt.Errorf("empty md5 file")
+		return fmt.Errorf("empty sha256 file")
 	}
 	expected := strings.TrimSpace(fields[0])
 
@@ -234,7 +235,7 @@ func verifyMD5(md5URL, filePath string) error {
 	}
 	defer f.Close()
 
-	h := md5.New() // fine for integrity check
+	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return err
 	}

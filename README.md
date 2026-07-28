@@ -1,3 +1,12 @@
+# Agent (CLI)
+
+`runguard wrap -- your-command` captures stdout/stderr/exit code/duration and
+posts a heartbeat; `runguard register` self-registers a job using an account
+agent token instead of a pre-existing heartbeat key (view/regenerate the
+token from the account page). See [`docs/AGENT_DATA.md`](docs/AGENT_DATA.md)
+for exactly what data the CLI sends and when.
+
+
 # Admin access
 
 Add an email to `admin.bootstrap_emails` in `backend/config.yml` and restart

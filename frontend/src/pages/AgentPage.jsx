@@ -199,8 +199,9 @@ export default function AgentPage() {
             <span class="font-mono">
               {downloadBase.replace(/^https?:\/\//, "")}
             </span>
-            . Each file has a matching <code>.md5</code> checksum for
-            verification.
+            . Each file has a matching <code>.sha256</code> checksum —
+            verified automatically by the install script and self-update,
+            and safe to check by hand too.
           </p>
         </div>
       </div>

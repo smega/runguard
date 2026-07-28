@@ -43,6 +43,12 @@ export const getAccount = () => request("/account", { method: "GET" });
 export const updateAccount = (payload) => request("/account", { method: "PATCH", body: JSON.stringify(payload) });
 export const logoutAllDevices = () => request("/account/logout-all", { method: "POST" });
 
+// Agent token: authenticates the runguard CLI's `register` subcommand
+// (Authorization: Bearer <token> against /api/agent/register). Generated
+// lazily on first GET; regenerating invalidates the old token immediately.
+export const getAgentToken = () => request("/account/agent-token", { method: "GET" });
+export const regenerateAgentToken = () => request("/account/agent-token/regenerate", { method: "POST" });
+
 export const adminListUsers = (q = "") => request(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`, { method: "GET" });
 export const adminPromoteUser = (id) => request(`/admin/users/${id}/promote`, { method: "POST" });
 export const adminDemoteUser = (id) => request(`/admin/users/${id}/demote`, { method: "POST" });

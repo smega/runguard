@@ -51,6 +51,11 @@ type User struct {
 	// every previously issued token, since authMiddleware rejects any token
 	// whose version doesn't match the current value.
 	TokenVersion int `bson:"token_version,omitempty" json:"-"`
+
+	// AgentToken authenticates the runguard CLI for self-registration
+	// (POST /api/agent/register), separate from the browser session cookie.
+	// Generated lazily on first request, regenerable from the account page.
+	AgentToken string `bson:"agent_token,omitempty" json:"-"`
 }
 
 // AdminAuditEntry records an administrative action for accountability —

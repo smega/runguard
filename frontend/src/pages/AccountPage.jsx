@@ -1,6 +1,6 @@
 import { route } from "preact-router";
 import { useEffect, useState } from "preact/hooks";
-import { createCheckoutLink, createPortalLink, getAccount, getBilling, logoutAllDevices, updateAccount } from "../api.js";
+import { createCheckoutLink, createPortalLink, getAccount, getAgentToken, getBilling, logoutAllDevices, regenerateAgentToken, updateAccount } from "../api.js";
 
 export default function AccountPage({ user, onLogout }) {
   const [account, setAccount] = useState(null);
@@ -11,6 +11,12 @@ export default function AccountPage({ user, onLogout }) {
   const [billingBusy, setBillingBusy] = useState("");
   const [loggingOutAll, setLoggingOutAll] = useState(false);
   const [logoutAllMessage, setLogoutAllMessage] = useState("");
+
+  const [agentToken, setAgentToken] = useState("");
+  const [agentTokenVisible, setAgentTokenVisible] = useState(false);
+  const [agentTokenLoading, setAgentTokenLoading] = useState(false);
+  const [agentTokenError, setAgentTokenError] = useState("");
+  const [agentTokenCopied, setAgentTokenCopied] = useState(false);
 
   useEffect(() => { if (!user) route("/", true); }, [user]);
   useEffect(() => {
@@ -82,6 +88,51 @@ export default function AccountPage({ user, onLogout }) {
       setAccountError(err.message || "Failed to log out other sessions");
     } finally {
       setLoggingOutAll(false);
+    }
+  }
+
+  async function handleShowAgentToken() {
+    if (agentToken) {
+      setAgentTokenVisible((v) => !v);
+      return;
+    }
+    setAgentTokenLoading(true);
+    setAgentTokenError("");
+    try {
+      const res = await getAgentToken();
+      setAgentToken(res.agent_token || "");
+      setAgentTokenVisible(true);
+    } catch (err) {
+      setAgentTokenError(err.message || "Failed to load agent token");
+    } finally {
+      setAgentTokenLoading(false);
+    }
+  }
+
+  async function handleRegenerateAgentToken() {
+    if (!window.confirm("Regenerate your agent token? Any CLI already using the current token will stop being able to register new jobs.")) {
+      return;
+    }
+    setAgentTokenLoading(true);
+    setAgentTokenError("");
+    try {
+      const res = await regenerateAgentToken();
+      setAgentToken(res.agent_token || "");
+      setAgentTokenVisible(true);
+    } catch (err) {
+      setAgentTokenError(err.message || "Failed to regenerate agent token");
+    } finally {
+      setAgentTokenLoading(false);
+    }
+  }
+
+  async function handleCopyAgentToken() {
+    try {
+      await navigator.clipboard.writeText(agentToken);
+      setAgentTokenCopied(true);
+      setTimeout(() => setAgentTokenCopied(false), 1500);
+    } catch {
+      // clipboard API unavailable — token is already visible on screen to copy manually
     }
   }
 
@@ -158,6 +209,50 @@ export default function AccountPage({ user, onLogout }) {
           </div>
           <button type="button" onClick={handleToggleSummary} disabled={savingSummary} class={(a.summary_email_enabled ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-slate-50 border-slate-200 text-slate-600") + " inline-flex items-center px-3 py-1.5 rounded-full text-[11px] border"}>{savingSummary ? "Saving…" : a.summary_email_enabled ? "Summary email on" : "Summary email off"}</button>
         </div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+        <div>
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Agent token</p>
+          <p class="mt-1 text-sm text-slate-700">
+            Used by <code>runguard register</code> to create jobs from the CLI without copying a heartbeat key by hand first.
+            Keep it secret — anyone with this token can create jobs on your account.
+          </p>
+        </div>
+
+        {agentTokenError && <p class="text-xs text-red-600">{agentTokenError}</p>}
+
+        {agentTokenVisible && agentToken ? (
+          <div class="flex flex-wrap items-center gap-2">
+            <code class="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px] break-all">{agentToken}</code>
+            <button type="button" onClick={handleCopyAgentToken} class="px-3 py-1.5 rounded-full border border-slate-300 text-xs text-slate-700 hover:bg-slate-100">
+              {agentTokenCopied ? "Copied!" : "Copy"}
+            </button>
+          </div>
+        ) : null}
+
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleShowAgentToken}
+            disabled={agentTokenLoading}
+            class="px-3 py-1.5 rounded-full border border-slate-300 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+          >
+            {agentTokenLoading ? "Loading…" : agentTokenVisible ? "Hide token" : agentToken ? "Show token" : "Reveal token"}
+          </button>
+          <button
+            type="button"
+            onClick={handleRegenerateAgentToken}
+            disabled={agentTokenLoading}
+            class="px-3 py-1.5 rounded-full border border-slate-300 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+          >
+            Regenerate
+          </button>
+        </div>
+
+        <p class="text-[11px] text-slate-500">
+          Example: <code>runguard register --token=YOUR_AGENT_TOKEN --name="orders sync" --interval=60</code>
+        </p>
       </div>
 
       {(plan.allow_exports || isAdmin) && (

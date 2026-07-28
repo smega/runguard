@@ -203,6 +203,21 @@ func main() {
 		account.GET("", app.handleGetAccount)
 		account.PATCH("", app.handleUpdateAccount)
 		account.POST("/logout-all", app.handleLogoutAllDevices)
+
+		// Agent token: lets the CLI self-register jobs without the account
+		// owner needing to create a heartbeat key by hand first. Viewed and
+		// regenerated from the browser (cookie auth); used by the CLI as a
+		// Bearer token against /api/agent/*.
+		account.GET("/agent-token", app.handleGetAgentToken)
+		account.POST("/agent-token/regenerate", app.handleRegenerateAgentToken)
+	}
+
+	// CLI self-registration: authenticated via "Authorization: Bearer
+	// <agent_token>" instead of the browser session cookie — the CLI has no
+	// way to hold a cookie jar across cron runs.
+	agent := api.Group("/agent").Use(app.agentAuthMiddleware())
+	{
+		agent.POST("/register", app.handleAgentRegister)
 	}
 
 	// Admin-only user management/audit log. Replaces manually flipping

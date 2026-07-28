@@ -171,7 +171,7 @@ esac
 
 BIN_NAME="runguard-${goos}-${goarch}-${VERSION}"
 REMOTE_BIN_URL="${DOWNLOAD_BASE%/}/${VERSION}/${BIN_NAME}"
-REMOTE_MD5_URL="${REMOTE_BIN_URL}.md5"
+REMOTE_SHA256_URL="${REMOTE_BIN_URL}.sha256"
 
 INSTALL_DIR="$(choose_install_dir)"
 INSTALL_PATH="${INSTALL_DIR}/runguard"
@@ -189,35 +189,39 @@ if ! curl -fsSL "${REMOTE_BIN_URL}" -o "${TMP_BIN}"; then
 fi
 chmod +x "${TMP_BIN}"
 
-# Verify checksum if .md5 exists
-echo "==> Verifying checksum (if .md5 is available)..." >&2
-TMP_MD5="$(mktemp /tmp/runguard.md5.XXXXXX || true)"
+# Verify checksum. This is fatal on mismatch (or if no checksum can be
+# obtained/computed at all) — a check that only warns isn't actually
+# protecting against a tampered or corrupted binary.
+echo "==> Verifying SHA256 checksum..." >&2
+TMP_SHA256="$(mktemp /tmp/runguard.sha256.XXXXXX)"
 
-if curl -fsSL "${REMOTE_MD5_URL}" -o "${TMP_MD5}" 2>/dev/null; then
-  expected="$(awk '{print $1}' "${TMP_MD5}" 2>/dev/null || true)"
-  actual=""
-
-  if command -v md5sum >/dev/null 2>&1; then
-    actual="$(md5sum "${TMP_BIN}" | awk '{print $1}')"
-  elif command -v md5 >/dev/null 2>&1; then
-    actual="$(md5 -q "${TMP_BIN}")"
-  else
-    echo "    No md5sum or md5 found; skipping checksum verification." >&2
-    expected=""
-  fi
-
-  if [[ -n "${expected}" && -n "${actual}" ]]; then
-    if [[ "${expected}" == "${actual}" ]]; then
-      echo "    Checksum OK." >&2
-    else
-      echo "WARNING: Checksum mismatch! (expected ${expected}, got ${actual})" >&2
-    fi
-  else
-    echo "    Unable to compare checksum; continuing without strict verification." >&2
-  fi
-else
-  echo "    No .md5 file found at ${REMOTE_MD5_URL}, skipping checksum verification." >&2
+if ! curl -fsSL "${REMOTE_SHA256_URL}" -o "${TMP_SHA256}" 2>/dev/null; then
+  echo "ERROR: No .sha256 file found at ${REMOTE_SHA256_URL}; refusing to install without a checksum." >&2
+  rm -f "${TMP_BIN}" "${TMP_SHA256}"
+  exit 1
 fi
+
+expected="$(awk '{print $1}' "${TMP_SHA256}" 2>/dev/null || true)"
+actual=""
+
+if command -v sha256sum >/dev/null 2>&1; then
+  actual="$(sha256sum "${TMP_BIN}" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+  actual="$(shasum -a 256 "${TMP_BIN}" | awk '{print $1}')"
+else
+  echo "ERROR: Neither sha256sum nor shasum found; cannot verify checksum, refusing to install." >&2
+  rm -f "${TMP_BIN}" "${TMP_SHA256}"
+  exit 1
+fi
+
+if [[ -z "${expected}" || -z "${actual}" || "${expected}" != "${actual}" ]]; then
+  echo "ERROR: Checksum mismatch! (expected ${expected:-<none>}, got ${actual:-<none>})" >&2
+  echo "       The download may be corrupted or tampered with. Not installing." >&2
+  rm -f "${TMP_BIN}" "${TMP_SHA256}"
+  exit 1
+fi
+echo "    Checksum OK." >&2
+rm -f "${TMP_SHA256}"
 
 echo "==> Installing to ${INSTALL_PATH}"
 

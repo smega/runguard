@@ -27,11 +27,11 @@ type CLIVersionsResponse struct {
 	Versions     []string `json:"versions"`
 
 	// Arch-aware extras (populated when ?arch= is provided)
-	Arch      string `json:"arch,omitempty"`
-	Channel   string `json:"channel,omitempty"`
-	Version   string `json:"version,omitempty"`
-	BinaryURL string `json:"binary,omitempty"`
-	BinaryMD5 string `json:"binary_md5,omitempty"`
+	Arch         string `json:"arch,omitempty"`
+	Channel      string `json:"channel,omitempty"`
+	Version      string `json:"version,omitempty"`
+	BinaryURL    string `json:"binary,omitempty"`
+	BinarySHA256 string `json:"binary_sha256,omitempty"`
 }
 
 func (a *App) handleCLIListVersions(c *gin.Context) {
@@ -81,7 +81,7 @@ func (a *App) handleCLIListVersions(c *gin.Context) {
 				bin := "runguard-" + goos + "-" + goarch + "-" + version
 				url := base + "/" + version + "/" + bin
 				resp.BinaryURL = url
-				resp.BinaryMD5 = url + ".md5"
+				resp.BinarySHA256 = url + ".sha256"
 			}
 		}
 	}

@@ -82,14 +82,16 @@ for t in "${targets[@]}"; do
   echo "Uploading new runguard binary..."
   scp -i "$SSH_KEY" "${OUT_PATH}" $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/${BIN_NAME}
 
-  echo "Create .md5 file..."
-  # md5sum "${OUT_PATH}" > "${OUT_PATH}.md5"
-    (
+  # SHA256 (not MD5): actually usable for tamper-detection, not just
+  # corrupted-download detection. install.sh and self-update both verify
+  # against this and now abort on mismatch instead of just warning.
+  echo "Create .sha256 file..."
+  (
     cd "${BUILD_DIR}"
-    md5sum "${BIN_NAME}" > "${BIN_NAME}.md5"
+    sha256sum "${BIN_NAME}" > "${BIN_NAME}.sha256"
   )
-  echo "Uploading .md5 file..."
-  scp -i "$SSH_KEY" "${OUT_PATH}.md5" $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/${BIN_NAME}.md5
+  echo "Uploading .sha256 file..."
+  scp -i "$SSH_KEY" "${OUT_PATH}.sha256" $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/${BIN_NAME}.sha256
 
 
 done
