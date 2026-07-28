@@ -4,7 +4,7 @@ import Router, { route } from "preact-router";
 import { Link } from "preact-router/match";
 import { me, logout } from "./api.js";
 
-import Navbar from "./components/Navbar.jsx";
+import Navbar from "./components/NavBar.jsx";
 import LandingPage from "./pages/LandingPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import SignupPage from "./pages/SignupPage.jsx";
@@ -25,6 +25,8 @@ import DocsPage from "./pages/DocsPage.jsx";
 import SecurityPage from "./pages/SecurityPage.jsx";
 import PrivacyPage from "./pages/PrivacyPage.jsx";
 import TermsPage from "./pages/TermsPage.jsx";
+import AdminPage from "./pages/AdminPage.jsx";
+import StatusPage from "./pages/StatusPage.jsx";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -66,6 +68,8 @@ export default function App() {
           <AccountPage path="/account" user={user} onUserUpdate={setUser} onLogout={handleLogout} />
           <WebhooksPage path="/webhooks" user={user} />
           <AgentPage path="/agent" />
+          <AdminPage path="/admin" user={user} />
+          <StatusPage path="/status" />
         </Router>
       </main>
       <footer class="border-t border-slate-200 text-xs text-slate-500 py-4 text-center bg-white">
@@ -79,6 +83,7 @@ export default function App() {
           <Link href="/security" class="hover:text-slate-900">Security</Link>
           <Link href="/privacy" class="hover:text-slate-900">Privacy</Link>
           <Link href="/terms" class="hover:text-slate-900">Terms</Link>
+          <Link href="/status" class="hover:text-slate-900">Status</Link>
         </div>
       </footer>
     </div>

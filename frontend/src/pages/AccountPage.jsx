@@ -1,6 +1,6 @@
 import { route } from "preact-router";
 import { useEffect, useState } from "preact/hooks";
-import { createCheckoutLink, createPortalLink, getAccount, getBilling, updateAccount } from "../api.js";
+import { createCheckoutLink, createPortalLink, getAccount, getBilling, logoutAllDevices, updateAccount } from "../api.js";
 
 export default function AccountPage({ user, onLogout }) {
   const [account, setAccount] = useState(null);
@@ -9,6 +9,8 @@ export default function AccountPage({ user, onLogout }) {
   const [accountError, setAccountError] = useState("");
   const [savingSummary, setSavingSummary] = useState(false);
   const [billingBusy, setBillingBusy] = useState("");
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [logoutAllMessage, setLogoutAllMessage] = useState("");
 
   useEffect(() => { if (!user) route("/", true); }, [user]);
   useEffect(() => {
@@ -70,6 +72,19 @@ export default function AccountPage({ user, onLogout }) {
     window.location.href = `/api/exports/jobs.${kind}`;
   };
 
+  async function handleLogoutAll() {
+    setLoggingOutAll(true);
+    setLogoutAllMessage("");
+    try {
+      await logoutAllDevices();
+      setLogoutAllMessage("Done — every other signed-in session/device has been logged out.");
+    } catch (err) {
+      setAccountError(err.message || "Failed to log out other sessions");
+    } finally {
+      setLoggingOutAll(false);
+    }
+  }
+
   if (!user) return null;
   if (loadingAccount && !account) return <div class="p-6"><p class="text-sm text-slate-500">Loading account…</p></div>;
   if (accountError && !account) return <div class="p-6"><p class="text-sm text-red-600">{accountError}</p></div>;
@@ -96,7 +111,19 @@ export default function AccountPage({ user, onLogout }) {
             {user.created_at && <div><span class="text-slate-500">Member since: </span><span>{new Date(user.created_at).toLocaleDateString()}</span></div>}
             {isAdmin && <div class="mt-2"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-slate-900 text-slate-50">Admin workspace</span></div>}
           </div>
-          {onLogout && <div class="mt-4"><button onClick={onLogout} class="px-3 py-1.5 rounded-full border border-slate-300 text-xs text-slate-700 hover:bg-slate-100">Logout</button></div>}
+          <div class="mt-4 flex flex-wrap items-center gap-2">
+            {onLogout && <button onClick={onLogout} class="px-3 py-1.5 rounded-full border border-slate-300 text-xs text-slate-700 hover:bg-slate-100">Logout</button>}
+            <button
+              type="button"
+              onClick={handleLogoutAll}
+              disabled={loggingOutAll}
+              class="px-3 py-1.5 rounded-full border border-slate-300 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              title="Invalidates every other signed-in session immediately, without logging you out here"
+            >
+              {loggingOutAll ? "Logging out other sessions…" : "Log out of all other devices"}
+            </button>
+          </div>
+          {logoutAllMessage && <p class="mt-2 text-xs text-emerald-700">{logoutAllMessage}</p>}
         </section>
 
         <section class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">

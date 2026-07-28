@@ -41,6 +41,12 @@ export const getJobStats = (id) => request(`/jobs/${id}/stats`);
 
 export const getAccount = () => request("/account", { method: "GET" });
 export const updateAccount = (payload) => request("/account", { method: "PATCH", body: JSON.stringify(payload) });
+export const logoutAllDevices = () => request("/account/logout-all", { method: "POST" });
+
+export const adminListUsers = (q = "") => request(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`, { method: "GET" });
+export const adminPromoteUser = (id) => request(`/admin/users/${id}/promote`, { method: "POST" });
+export const adminDemoteUser = (id) => request(`/admin/users/${id}/demote`, { method: "POST" });
+export const adminAuditLog = () => request("/admin/audit-log", { method: "GET" });
 
 export async function getJson(url) {
   const res = await fetch(url, { method: "GET", credentials: "include" });
@@ -81,6 +87,17 @@ export const deleteProject = (id) => request(`/projects/${id}`, { method: "DELET
 
 export const listIncidents = (state = "") => request(`/incidents${state ? `?state=${encodeURIComponent(state)}` : ""}`, { method: "GET" });
 export const updateIncident = (id, state) => request(`/incidents/${id}`, { method: "PATCH", body: JSON.stringify({ state }) });
+
+// Doesn't use request() because a 503 (service unhealthy) is a normal,
+// expected response here — the status page needs the JSON body either way,
+// not an exception.
+export async function getPublicStatus() {
+  const res = await fetch(`${API_BASE}/public/status`, { method: "GET" });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch {}
+  return { ok: res.ok, data };
+}
 
 export const getPricing = () => request("/pricing", { method: "GET" });
 export const getBilling = () => request("/billing", { method: "GET" });

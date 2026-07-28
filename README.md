@@ -1,10 +1,14 @@
-# make user admin
+# Admin access
 
-// in mongosh, adjust the email to yours:
-db.users.updateOne(
-  { email: "you@example.com" },
-  { $set: { is_admin: true } }
-)
+Add an email to `admin.bootstrap_emails` in `backend/config.yml` and restart
+the backend — that account is promoted to admin automatically (idempotent,
+safe to leave configured permanently). From there, admins can promote/demote
+other users from the in-app Admin page (`/admin`, only visible to admins),
+which also keeps an audit log of who granted/revoked admin access and when.
+The last remaining admin can't be demoted, so this can't lock you out.
+
+(The old approach of running a `db.users.updateOne(...)` command by hand in
+mongosh still works if you ever need it, but shouldn't be necessary anymore.)
 
 
 ## Stripe billing
@@ -29,3 +33,27 @@ Recommended Stripe webhook events:
 - `customer.subscription.deleted`
 - `invoice.payment_failed`
 - `invoice.paid`
+
+
+## Backups
+
+The real safety net should be Atlas's own continuous backups — turn those on
+in the Atlas dashboard for the production cluster. `scripts/backup_mongo.sh`
+is a secondary, ad-hoc snapshot tool (good before a risky migration, or as a
+cron job for an extra off-Atlas copy):
+
+```
+./scripts/backup_mongo.sh                       # reads mongo.uri from backend/config.yml
+MONGO_URI="mongodb+srv://..." ./scripts/backup_mongo.sh
+```
+
+
+## CI/CD
+
+`.github/workflows/ci.yml` runs a build/format/vet check on every push and
+PR (no automated tests yet — tracked separately). `.github/workflows/deploy.yml`
+is a manual (`workflow_dispatch`) deploy that reuses `_build/build_go.sh` and
+`_build/build_preact.sh` — the same scripts you'd run locally — so there's
+one definition of "deploy" either way. It's disabled until the required repo
+secrets are added; see the comment at the top of that workflow file for
+exactly which ones and what they should contain.

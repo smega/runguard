@@ -60,6 +60,9 @@ export default function Navbar({ user, onLogout }) {
                   <Link href="/pricing" activeClassName="bg-slate-100 text-slate-900" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Pricing</Link>
                   <Link href="/webhooks" activeClassName="bg-slate-100 text-slate-900" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Webhooks</Link>
                   <Link href="/docs" activeClassName="bg-slate-100 text-slate-900" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Docs</Link>
+                  {user.is_admin && (
+                    <Link href="/admin" activeClassName="bg-slate-100 text-slate-900" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Admin</Link>
+                  )}
                   <div class="border-t border-slate-200 mt-1 pt-1">
                     <button type="button" onClick={handleLogoutClick} class="w-full text-left px-3 py-1.5 text-slate-700 hover:bg-slate-50">
                       Logout
