@@ -1,0 +1,65 @@
+name: CI
+
+# Build validation only — no automated tests yet (tracked as a follow-up).
+# Runs on every push/PR so a broken build/format is caught before it reaches
+# the deploy workflow, which is manual and separate (see deploy.yml).
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: backend/go.sum
+
+      - name: gofmt check
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      # TODO: add `go test ./...` once a real test suite exists.
+
+  frontend:
+    name: Frontend (Preact/Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # No package-lock.json is committed yet, so `npm ci` isn't usable —
+      # switch to `npm ci` once one is added for reproducible installs.
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      # TODO: add a frontend test runner (e.g. vitest) once tests exist.

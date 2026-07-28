@@ -10,9 +10,11 @@ set -euo pipefail
 VERSIONFILE="_build/version.txt"
 NEWVERSIONFILE="_build/version_new.txt"
 
-REMOTE_USER="root"
-REMOTE_HOST="manage"  
-# REMOTE_DIR="$DEPLOY_DIR"
+# Config is overridable via env vars so this script works unchanged from a
+# developer's machine or from CI (see .github/workflows/deploy.yml).
+REMOTE_USER="${REMOTE_USER:-root}"
+REMOTE_HOST="${REMOTE_HOST:-manage}"
+SSH_KEY="${SSH_KEY:-$HOME/Downloads/ssh_keys/enyim}"
 
 
 if [[ ! -f "${VERSIONFILE}" ]]; then
@@ -61,7 +63,7 @@ targets=(
 )
 
 echo "Ensure remote dir exists..."
-ssh -i ~/Downloads/ssh_keys/enyim $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_DIR"
+ssh -i "$SSH_KEY" $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_DIR"
 
 for t in "${targets[@]}"; do
   read -r GOOS GOARCH <<<"${t}"
@@ -78,7 +80,7 @@ for t in "${targets[@]}"; do
 
   chmod +x "${OUT_PATH}"
   echo "Uploading new runguard binary..."
-  scp -i ~/Downloads/ssh_keys/enyim "${OUT_PATH}" $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/${BIN_NAME}
+  scp -i "$SSH_KEY" "${OUT_PATH}" $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/${BIN_NAME}
 
   echo "Create .md5 file..."
   # md5sum "${OUT_PATH}" > "${OUT_PATH}.md5"
@@ -87,7 +89,7 @@ for t in "${targets[@]}"; do
     md5sum "${BIN_NAME}" > "${BIN_NAME}.md5"
   )
   echo "Uploading .md5 file..."
-  scp -i ~/Downloads/ssh_keys/enyim "${OUT_PATH}.md5" $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/${BIN_NAME}.md5
+  scp -i "$SSH_KEY" "${OUT_PATH}.md5" $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/${BIN_NAME}.md5
 
 
 done
@@ -95,50 +97,3 @@ done
 echo "==> Done. Binaries are in: ${BUILD_DIR}"
 echo "    Version written to: ${NEWVERSIONFILE}"
 mv ${NEWVERSIONFILE} ${VERSIONFILE}
-
-
-
-
-# VERSION="$1"
-# SSH_TARGET="$2"
-# REMOTE_ROOT_DIR="$3"
-# LOCAL_ROOT_DIR="${4:-./dist}"
-
-# LOCAL_DIR="${LOCAL_ROOT_DIR}/${VERSION}"
-# REMOTE_DIR="${REMOTE_ROOT_DIR%/}/${VERSION}"
-
-# if [[ ! -d "${LOCAL_DIR}" ]]; then
-#   echo "Local build dir not found: ${LOCAL_DIR}" >&2
-#   exit 1
-# fi
-
-# echo "==> Uploading RunGuard CLI ${VERSION}"
-# echo "    Local dir : ${LOCAL_DIR}"
-# echo "    Remote dir: ${SSH_TARGET}:${REMOTE_DIR}"
-
-# ssh "${SSH_TARGET}" "mkdir -p '${REMOTE_DIR}'"
-
-# for f in "${LOCAL_DIR}"/runguard-*; do
-#   if [[ ! -f "${f}" ]]; then
-#     echo "No files matching ${LOCAL_DIR}/runguard-* found" >&2
-#     exit 1
-#   fi
-
-#   base="$(basename "${f}")"
-#   md5_file="${base}.md5"
-
-#   echo "  -> ${base}"
-
-#   # Create .md5 locally
-#   (
-#     cd "${LOCAL_DIR}"
-#     md5sum "${base}" > "${md5_file}"
-#   )
-
-#   # Upload binary + .md5
-#   scp "${LOCAL_DIR}/${base}" "${LOCAL_DIR}/${md5_file}" \
-#     "${SSH_TARGET}:${REMOTE_DIR}/"
-# done
-
-# echo "==> Upload complete:"
-# echo "    https://downloads.runguard.smega.eu/${VERSION}/"

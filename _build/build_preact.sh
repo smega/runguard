@@ -4,12 +4,13 @@ set -euo pipefail
 
 
 
+# Config is overridable via env vars so this script works unchanged from a
+# developer's machine or from CI (see .github/workflows/deploy.yml).
 BUILD_DIR="./tmp_frontend"
-REMOTE_USER="root"
-REMOTE_HOST="manage"  
-REMOTE_DIR="/srv/runguard/frontend"
-
-
+REMOTE_USER="${REMOTE_USER:-root}"
+REMOTE_HOST="${REMOTE_HOST:-manage}"
+REMOTE_DIR="${REMOTE_DIR:-/srv/runguard/frontend}"
+SSH_KEY="${SSH_KEY:-$HOME/Downloads/ssh_keys/enyim}"
 
 cleanup() {
   # runs on *any* script exit (success or failure)
@@ -34,11 +35,11 @@ cd ..
 
 # sync frontend files
 echo "Uploading new frontend files..."
-rsync -rav -e "ssh -i ~/Downloads/ssh_keys/enyim" --delete ${BUILD_DIR}/dist/ $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/
+rsync -rav -e "ssh -i $SSH_KEY" --delete ${BUILD_DIR}/dist/ "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/"
 
 # reload nginx
 echo "Reloading nginx..."
-ssh -i ~/Downloads/ssh_keys/enyim $REMOTE_USER@$REMOTE_HOST 'systemctl reload nginx'
+ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" 'systemctl reload nginx'
 
 # cleanup
 echo "Cleaning up..."

@@ -1,0 +1,82 @@
+name: Deploy
+
+# Manual deploy — never runs automatically. Reuses the exact same
+# _build/*.sh scripts you'd run locally, so there's one source of truth for
+# what "deploy" means; this workflow just supplies the pieces that only
+# exist on your machine today (the SSH key and config.yml).
+#
+# Disabled until the required repo secrets exist (Settings > Secrets and
+# variables > Actions):
+#   SSH_PRIVATE_KEY   - private key content (the ~/Downloads/ssh_keys/enyim
+#                       equivalent), e.g. `cat ~/.ssh/id_ed25519`
+#   SSH_KNOWN_HOSTS   - output of `ssh-keyscan -H <your-host>`, so the
+#                       runner can verify the server instead of blindly
+#                       trusting it (avoid StrictHostKeyChecking=no)
+#   SSH_HOST          - the real hostname/IP of "manage" (a CI runner has
+#                       no SSH config alias for it)
+#   SSH_USER          - defaults to root if unset, matching the scripts
+#   BACKEND_CONFIG_YML - full contents of backend/config.yml (never
+#                       committed to git, so it has to come from a secret)
+#
+# Until those are set, this workflow will fail early with a clear message
+# rather than doing anything partial.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to deploy"
+        type: choice
+        options: [backend, frontend, all]
+        default: all
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      REMOTE_USER: ${{ secrets.SSH_USER || 'root' }}
+      REMOTE_HOST: ${{ secrets.SSH_HOST }}
+      SSH_KEY: ${{ github.workspace }}/deploy_key
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets are set
+        run: |
+          missing=()
+          [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] && missing+=("SSH_PRIVATE_KEY")
+          [ -z "${{ secrets.SSH_KNOWN_HOSTS }}" ] && missing+=("SSH_KNOWN_HOSTS")
+          [ -z "${{ secrets.SSH_HOST }}" ] && missing+=("SSH_HOST")
+          [ -z "${{ secrets.BACKEND_CONFIG_YML }}" ] && missing+=("BACKEND_CONFIG_YML")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required repo secrets: ${missing[*]}"
+            echo "See the comment at the top of this workflow for what each one needs to contain."
+            exit 1
+          fi
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > "$SSH_KEY"
+          chmod 600 "$SSH_KEY"
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Write backend/config.yml from secret
+        if: ${{ inputs.target == 'backend' || inputs.target == 'all' }}
+        run: echo "${{ secrets.BACKEND_CONFIG_YML }}" > backend/config.yml
+
+      - uses: actions/setup-go@v5
+        if: ${{ inputs.target == 'backend' || inputs.target == 'all' }}
+        with:
+          go-version: "1.24"
+
+      - name: Deploy backend
+        if: ${{ inputs.target == 'backend' || inputs.target == 'all' }}
+        run: bash _build/build_go.sh
+
+      - uses: actions/setup-node@v4
+        if: ${{ inputs.target == 'frontend' || inputs.target == 'all' }}
+        with:
+          node-version: "20"
+
+      - name: Deploy frontend
+        if: ${{ inputs.target == 'frontend' || inputs.target == 'all' }}
+        run: bash _build/build_preact.sh
