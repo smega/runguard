@@ -1,0 +1,342 @@
+<!-- 1. Per-job severity (“priority”)
+
+Reason: differentiates “backup missed” vs “orders ingest late”
+Value: enables future notification routing / grouping / escalation / on-call
+Schema change: trivial
+
+Severity string `bson:"severity,omitempty" json:"severity,omitempty"` // low|normal|high|critical
+
+
+Frontend: dropdown on job
+Daily summary: sort by severity
+Public link: show severity subtly
+
+→ Makes real production use much saner -->
+
+<!-- 2. Multi-URL Webhooks with templating
+
+Right now payload is fixed. Next step:
+
+✔ custom headers
+✔ choose Slack vs generic JSON vs PagerDuty events vs Teams
+✔ custom payload templates (Go text/template)
+
+Even a minimal v1:
+
+webhook_type: "slack" | "json" -->
+
+
+<!-- is a big unlock. -->
+
+3. Weekly summary email
+
+You already have daily. Weekly is for executives & insights:
+
+uptime %
+
+job status distribution
+
+top offenders
+
+average lateness
+
+changes (created/deleted jobs)
+
+These become shareable artifacts → retention boost.
+
+<!-- 4. Auto-silence / maintenance windows (per job + global)
+
+Real cron jobs often get disabled for deploys or experiments.
+
+Implementation:
+
+job.silenced_until = timestamp
+
+job.silence_reason = string
+
+optionally global window (user-level)
+
+Frontend:
+
+“Silence for: 1h / 4h / until tomorrow / custom”
+
+Alerts respect silence; run stats still count. -->
+
+5. Billing & Upgrade Path
+
+You already have a good monetization shape. To finish it:
+
+throttling (requests/min per plan)
+
+exports throttle (e.g. 10/day)
+
+inbound heartbeats blocking once over quota
+
+frictionless upgrade flow
+
+Later:
+
+Stripe Billing
+
+metered usage (optional)
+
+org/members
+
+
+
+
+
+
+🧩 After that (second wave)
+
+If you want to build a real competitor to Cronitor / DeadMan / Healthchecks:
+
+A. Multi-user Teams / Orgs
+
+orgs
+
+roles: owner/admin/viewer
+
+notification routes per member
+
+SSO (GitHub/Google)
+
+audit log
+
+B. Multi-channel notifications
+
+Slack App (OAuth install)
+
+Teams webhook
+
+Discord
+
+PagerDuty
+
+OpsGenie
+
+SMS (Twilio / Nexmo)
+
+Phone call (buzzers for critical)
+
+C. CI/Infra integrations
+
+GitHub Action “post heartbeat”
+
+
+GitLab CI template
+
+Argo Workflow hook
+
+Terraform provider:
+
+resource "runguard_job" "extract" {
+  name = "extract"
+  interval = "15m"
+  grace    = "3m"
+  severity = "high"
+}
+
+
+^ customers LOVE infra-as-code onboarding.
+
+D. CLI
+
+runguard jobs list
+runguard jobs test --id=123
+runguard org members
+
+Super attractive for dev-heavy orgs.
+
+E. Webhook retries
+
+Real webhook delivery should have:
+
+3x retry with backoff
+
+DLQ (dead letter queue)
+
+redrive
+
+🎯 If you want fast path to commercialization
+
+I’d suggest this order:
+
+<!-- Severity -->
+
+<!-- Maintenance windows -->
+
+Weekly summary
+
+<!-- Webhook templates -->
+
+Upgrade funnel / billing
+
+Terraform provider
+
+Slack app
+
+Org / multi-user
+
+Retries / DLQ
+
+CLI
+
+--------------------------------------
+Overview upgrades (triage view)
+
+Show:
+
+count of late jobs, grouped by severity
+
+which ones are currently silenced
+
+tiny “recent failures” badge from webhook logs
+
+Essentially a mini NOC board: “what should I care about right now?”
+
+Job history exports per-job
+
+On the job detail pane: “Export this job’s runs (CSV/XLSX)”.
+
+Reuse the existing exports machinery but scoped to a single job.
+
+Weekly summary email
+
+You already have daily summary + severity now.
+
+A weekly email to the user:
+
+uptime per job
+
+“top 5 noisiest jobs”
+
+how many alerts, by severity
+
+It’s a really nice “stickiness” and sales screenshot feature.
+
+Org / team basics
+
+Simple first cut:
+
+invite users to an org
+
+jobs belong to an org
+
+members can see each other’s jobs
+
+No complex roles yet, just “shared jobs” instead of strictly per-user.
+
+Small UX niceties
+
+Filter jobs by severity + “silenced only”
+
+Badge on jobs tab if there are any late critical jobs
+
+Remember last selected job between reloads (localStorage job ID)
+
+-------------------------------------------------
+🌒 Phase 2: Scheduled Silence Profiles
+
+Right now you silence manually (1h / 4h / etc). Most noisy jobs have predictable times — e.g.:
+
+during deploys
+
+before ingestion completes
+
+during ETL chain phases
+
+during daily vendor pushes
+
+So add:
+
+Profile	Example
+Daily window	“Silence every day 00:00–01:00”
+Weekly window	“Mondays 06:00–08:00 (deploys)”
+During business hours	“Mute alerts 09:00–17:00 Mon–Fri”
+Cron-based	“Silence at 0 */3 * * * for 15m”
+Environment-tied	“Mute during CI/CD rollout” (auto)
+🔗 Phase 3: Follow-the-Parent Silence
+
+Where job dependencies exist:
+
+ETL → Indexing → Summary → API
+
+
+If the ETL job is in maintenance for deploy, it makes no sense for indexing+summary to alert.
+
+Feature:
+
+“Silence this job when upstream X is silenced / late / deploying”
+
+This keeps noise low and helps real SRE workflows.
+
+🔧 Phase 4: Deployment-aware Silence
+
+If you integrate with:
+
+GitHub
+
+GitLab
+
+Argo
+
+Tekton
+
+Jenkins
+
+Drone
+
+CircleCI
+
+etc,
+
+then:
+
+auto-silence for the duration of deploy and 5min after
+
+This is what real observability vendors charge $$$ for.
+
+📡 Phase 5: Alert Routing Logic
+
+Right now webhook templates are “fire when late”. Add routing rules:
+
+Rule	Example
+by severity	“Critical → PagerDuty, Normal → Slack”
+by day/time	“BN oc → On-Call, daytime → Slack”
+by retry count	“After 3 failures, escalate to SMS”
+by environment	“Staging alerts → Slack only”
+
+This pairs with “multi-URL webhooks” perfectly.
+
+🧊 Phase 6: Freeze / unfreeze alerts on conditions
+
+These are game-changers:
+
+✔ “Freeze until first success”
+✔ “Freeze until next heartbeat”
+✔ “Freeze until manual unmute”
+
+Good for:
+
+recovery storms
+
+noisy deploys
+
+vendor downtime
+
+
+
+
+
+“Show logs in UI”
+
+update /api/jobs/:id/runs
+
+extend Preact UI with a disclosure panel for logs
+
+add icons for status + failure
+
+highlight duration
+
+admin override badge

@@ -1,0 +1,119 @@
+# Copy this file to config.yml and fill in real values.
+# config.yml is gitignored because it holds live secrets — never commit it.
+
+server:
+  addr: ":8888"
+  frontend_origin: "https://your-frontend-domain.example"
+
+public_base_url: "https://your-domain.example"
+
+mongo:
+  uri: "mongodb+srv://<user>:<password>@<cluster-host>/runguard?retryWrites=true&w=majority"
+  database: "runguard"
+
+auth:
+  # Generate a long random string, e.g.: openssl rand -hex 48
+  jwt_secret: "REPLACE_WITH_RANDOM_SECRET"
+  cookie_name: "cw_auth"
+  cookie_secure: false
+  cookie_domain: ""
+
+app:
+  base_url: "https://your-domain.example"
+
+mailgun:
+  enabled: true
+  domain: "mg.your-domain.example"
+  base_url: "https://api.eu.mailgun.net/v3"
+  api_key: "REPLACE_WITH_MAILGUN_API_KEY"
+  from: "RunGuard <info@your-domain.example>"
+
+alerts:
+  enabled: true
+  check_interval_seconds: 30
+  min_late_seconds: 0
+  cooldown_seconds: 1800
+
+cli:
+  download_base: "https://your-cli-download-domain.example"
+  stable: "0.1.3"
+  rc: ""
+  nightly: ""
+  default_channel: "latest"
+
+plans:
+  - id: free
+    label: Free
+    max_jobs: 1
+    max_projects: 1
+    allow_email_alerts: false
+    allow_public_links: false
+    allow_exports: false
+    bullets:
+      - Up to 1 monitored job
+      - Webhook alerts
+      - Daily summary email
+      - 1 project
+      - No public status links
+      - No per-job email alerts
+
+  - id: plus
+    label: Plus
+    max_jobs: 5
+    max_projects: 3
+    allow_email_alerts: true
+    allow_public_links: true
+    allow_exports: false
+    bullets:
+      - Up to 5 monitored jobs
+      - Webhook alerts
+      - Daily summary email
+      - Per-job email alerts
+      - Up to 3 projects
+      - Public status links
+
+  - id: scale
+    label: Scale
+    max_jobs: 20
+    max_projects: 10
+    allow_email_alerts: true
+    allow_public_links: true
+    allow_exports: true
+    bullets:
+      - Up to 20 monitored jobs
+      - Webhook alerts
+      - Daily summary email
+      - Per-job email alerts
+      - Public status links
+      - Up to 10 projects
+      - PDF/Excel exports
+      - Multi-project workflows
+
+
+billing:
+  provider: "stripe"
+  trial_days: 14
+  stripe_secret_key: "REPLACE_WITH_STRIPE_SECRET_KEY"
+  webhook_secret: "REPLACE_WITH_STRIPE_WEBHOOK_SECRET"
+  success_url: "https://your-domain.example/account?checkout=success"
+  cancel_url: "https://your-domain.example/pricing?checkout=cancelled"
+  portal_return_url: "https://your-domain.example/account"
+  plans:
+    - plan_id: free
+      price_monthly_gbp: 0
+      stripe_price_id: ""
+      checkout_url: ""
+      portal_url: ""
+      highlight: false
+    - plan_id: plus
+      price_monthly_gbp: 19
+      stripe_price_id: "REPLACE_WITH_STRIPE_PRICE_ID"
+      checkout_url: ""
+      portal_url: ""
+      highlight: true
+    - plan_id: scale
+      price_monthly_gbp: 59
+      stripe_price_id: "REPLACE_WITH_STRIPE_PRICE_ID"
+      checkout_url: ""
+      portal_url: ""
+      highlight: false

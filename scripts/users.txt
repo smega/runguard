@@ -1,0 +1,2 @@
+curl -fsS https://downloads.runguard.smega.eu/v0.1.0/runguard-linux-amd64.md5
+md5sum runguard-linux-amd64

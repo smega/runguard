@@ -1,0 +1,76 @@
+package main
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
+)
+
+type updateAccountRequest struct {
+	SummaryEmailEnabled *bool `json:"summary_email_enabled,omitempty"`
+	SummaryHourUTC      *int  `json:"summary_hour_utc,omitempty"`
+}
+type accountResponse struct {
+	Email               string       `json:"email"`
+	PlanID              string       `json:"plan_id"`
+	SummaryEmailEnabled bool         `json:"summary_email_enabled"`
+	SummaryHourUTC      int          `json:"summary_hour_utc"`
+	SummaryLastSentAt   *time.Time   `json:"summary_last_sent_at,omitempty"`
+	TrialEndsAt         *time.Time   `json:"trial_ends_at,omitempty"`
+	BillingStatus       string       `json:"billing_status"`
+	BillingCustomerID   string       `json:"billing_customer_id,omitempty"`
+	BillingSubscription string       `json:"billing_subscription_id,omitempty"`
+	Plan                PlanConfig   `json:"plan"`
+	PlanCatalog         []PlanConfig `json:"plan_catalog"`
+	IsAdmin             bool         `json:"is_admin"`
+}
+
+func (a *App) handleGetAccount(c *gin.Context) {
+	u := c.MustGet("user").(*User)
+	c.JSON(http.StatusOK, accountResponse{Email: u.Email, PlanID: u.Plan, SummaryEmailEnabled: u.SummaryEmailEnabled, SummaryHourUTC: u.SummaryHourUTC, SummaryLastSentAt: u.SummaryLastSentAt, TrialEndsAt: u.TrialEndsAt, BillingStatus: effectiveBillingStatus(u), BillingCustomerID: u.BillingCustomerID, BillingSubscription: u.BillingSubscriptionID, Plan: a.getPlanByID(u.Plan), PlanCatalog: a.cfg.Plans, IsAdmin: u.IsAdmin})
+}
+func (a *App) handleUpdateAccount(c *gin.Context) {
+	u, ok := currentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var req updateAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+		return
+	}
+	update := bson.M{}
+	if req.SummaryEmailEnabled != nil {
+		update["summary_email_enabled"] = *req.SummaryEmailEnabled
+	}
+	if req.SummaryHourUTC != nil {
+		h := *req.SummaryHourUTC
+		if h < 0 {
+			h = 0
+		}
+		if h > 23 {
+			h = 23
+		}
+		update["summary_hour_utc"] = h
+	}
+	if len(update) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+	if _, err := a.usersColl.UpdateByID(ctx, u.ID, bson.M{"$set": update}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "db error"})
+		return
+	}
+	var fresh User
+	if err := a.usersColl.FindOne(ctx, bson.M{"_id": u.ID}).Decode(&fresh); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reload user"})
+		return
+	}
+	c.JSON(http.StatusOK, accountResponse{Email: fresh.Email, PlanID: fresh.Plan, SummaryEmailEnabled: fresh.SummaryEmailEnabled, SummaryHourUTC: fresh.SummaryHourUTC, SummaryLastSentAt: fresh.SummaryLastSentAt, TrialEndsAt: fresh.TrialEndsAt, BillingStatus: effectiveBillingStatus(&fresh), BillingCustomerID: fresh.BillingCustomerID, BillingSubscription: fresh.BillingSubscriptionID, Plan: a.getPlanByID(fresh.Plan), PlanCatalog: a.cfg.Plans, IsAdmin: fresh.IsAdmin})
+}
