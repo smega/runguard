@@ -88,20 +88,18 @@ func (a *App) scanAndAlertLateJobs(ctx context.Context) error {
 			continue
 		}
 
-		status := computeJobStatus(&j, now)
-		// ...
-
-		if status != "late" {
+		// jobLateness handles both plain interval+grace jobs and
+		// cron-scheduled jobs (Job.CronExpr) uniformly -- see cron.go.
+		late, lateBy, seen := jobLateness(&j, now)
+		if !seen || !late {
 			continue
 		}
+		status := "late"
 
-		intervalPlusGrace := time.Duration(j.ExpectedIntervalSecs+j.GraceSecs) * time.Second
-		elapsed := now.Sub(*j.LastHeartbeatAt)
-		threshold := intervalPlusGrace + minLate
-		if elapsed < threshold {
+		if lateBy < minLate {
 			log.Printf(
-				"[alerts] job %s (%s) late but below threshold (elapsed=%s, threshold=%s)",
-				j.ID.Hex(), j.Name, elapsed, threshold,
+				"[alerts] job %s (%s) late but below threshold (lateBy=%s, minLate=%s)",
+				j.ID.Hex(), j.Name, lateBy, minLate,
 			)
 			continue
 		}
@@ -118,11 +116,6 @@ func (a *App) scanAndAlertLateJobs(ctx context.Context) error {
 			}
 		}
 
-		lateBy := elapsed - intervalPlusGrace
-		if lateBy < 0 {
-			lateBy = 0
-		}
-
 		// record a late run snapshot
 		a.insertJobRun(ctx, &j, "late", now, lateBy)
 		if err := a.openOrRefreshIncident(ctx, &j, IncidentKindLate, "Job missed its expected heartbeat window.", "late", now); err != nil {
@@ -130,8 +123,8 @@ func (a *App) scanAndAlertLateJobs(ctx context.Context) error {
 		}
 
 		log.Printf(
-			"[alerts] job %s (%s) is alertable; elapsed=%s (threshold=%s)",
-			j.ID.Hex(), j.Name, elapsed, threshold,
+			"[alerts] job %s (%s) is alertable; late by %s",
+			j.ID.Hex(), j.Name, lateBy,
 		)
 
 		var u User
@@ -296,29 +289,6 @@ func (a *App) sendJobWebhooksWithPayload(
 	return lastErr
 }
 
-// postJSONWithResult posts a JSON body and returns HTTP code + duration + error.
-// Non-2xx is treated as an error, but still returns the HTTP status.
-func postJSONWithResult(ctx context.Context, url string, body []byte) (code int, durationMs int64, err error) {
-	start := time.Now()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return 0, 0, fmt.Errorf("build webhook request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	duration := time.Since(start).Milliseconds()
-	if err != nil {
-		return 0, duration, fmt.Errorf("post webhook: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return resp.StatusCode, duration, fmt.Errorf("webhook non-2xx: %s", resp.Status)
-	}
-
-	return resp.StatusCode, duration, nil
-}
 
 func buildWebhookBodyForType(tType string, payload map[string]interface{}) ([]byte, error) {
 	switch strings.ToLower(tType) {
@@ -337,6 +307,29 @@ func buildWebhookBodyForType(tType string, payload map[string]interface{}) ([]by
 		}
 		body := map[string]interface{}{
 			"text": text,
+		}
+		return json.Marshal(body)
+
+	case WebhookTemplateTypeDiscord:
+		// Discord's incoming webhooks expect {"content": "..."} rather than
+		// Slack's {"text": "..."} -- same idea, different field name.
+		var content string
+		if v, ok := payload["text"].(string); ok && v != "" {
+			content = v
+		} else {
+			b, err := json.Marshal(payload)
+			if err != nil {
+				return nil, err
+			}
+			content = string(b)
+		}
+		// Discord rejects messages over 2000 characters outright, so trim
+		// rather than let the whole delivery fail on a long JSON fallback.
+		if len(content) > 2000 {
+			content = content[:1997] + "..."
+		}
+		body := map[string]interface{}{
+			"content": content,
 		}
 		return json.Marshal(body)
 

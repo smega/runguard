@@ -4,7 +4,9 @@
 posts a heartbeat; `runguard register` self-registers a job using an account
 agent token instead of a pre-existing heartbeat key (view/regenerate the
 token from the account page). See [`docs/AGENT_DATA.md`](docs/AGENT_DATA.md)
-for exactly what data the CLI sends and when.
+for exactly what data the CLI sends and when, and
+[`docs/KUBERNETES.md`](docs/KUBERNETES.md) for monitoring Kubernetes
+CronJobs specifically.
 
 
 # Admin access

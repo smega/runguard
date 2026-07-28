@@ -115,6 +115,13 @@ type Job struct {
 	Severity             string             `bson:"severity,omitempty" json:"severity,omitempty"`
 	MaintenanceUntil     *time.Time         `bson:"maintenance_until,omitempty" json:"maintenance_until,omitempty"`
 	WebhookURL           string             `bson:"webhook_url,omitempty" json:"webhook_url,omitempty"`
+
+	// CronExpr, when set, switches this job from plain interval+grace
+	// checking to a standard 5-field cron expression ("0 3 * * *"). See
+	// cron.go for the parser and jobLateness() for how the two modes are
+	// reconciled. Empty means "use ExpectedIntervalSecs/GraceSecs" (the
+	// original, still-default behavior).
+	CronExpr string `bson:"cron_expr,omitempty" json:"cron_expr,omitempty"`
 }
 
 type Incident struct {

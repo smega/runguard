@@ -36,6 +36,8 @@ export default function JobsPage({ user }) {
   const [jobName, setJobName] = useState("");
   const [intervalMinutes, setIntervalMinutes] = useState(60);
   const [graceMinutes, setGraceMinutes] = useState(5);
+  const [scheduleMode, setScheduleMode] = useState("interval"); // "interval" | "cron"
+  const [cronExpr, setCronExpr] = useState("");
   const [creating, setCreating] = useState(false);
   const [projects, setProjects] = useState([]);
   const [projectId, setProjectId] = useState("");
@@ -44,6 +46,7 @@ export default function JobsPage({ user }) {
   const [editName, setEditName] = useState("");
   const [editInterval, setEditInterval] = useState(60);
   const [editGrace, setEditGrace] = useState(5);
+  const [editCronExpr, setEditCronExpr] = useState("");
   const [editingBusy, setEditingBusy] = useState(false);
   const [editProjectId, setEditProjectId] = useState("");
 
@@ -235,13 +238,16 @@ export default function JobsPage({ user }) {
         jobName.trim(),
         Number(intervalMinutes),
         Number(graceMinutes),
-        projectId
+        projectId,
+        scheduleMode === "cron" ? cronExpr.trim() : ""
       );
       setJobs((prev) => [...prev, res.job]);
       setJobName("");
       setIntervalMinutes(60);
       setGraceMinutes(5);
       setProjectId("");
+      setCronExpr("");
+      setScheduleMode("interval");
       pushToast("success", "Job created.");
     } catch (err) {
       console.error(err);
@@ -258,6 +264,7 @@ export default function JobsPage({ user }) {
     setEditInterval(Math.round(job.expected_interval_seconds / 60));
     setEditGrace(Math.round(job.grace_seconds / 60));
     setEditProjectId(job.project_id || "");
+    setEditCronExpr(job.cron_expr || "");
     setJobError("");
   };
 
@@ -274,6 +281,7 @@ export default function JobsPage({ user }) {
         name: editName.trim(),
         interval_minutes: Number(editInterval),
         grace_minutes: Number(editGrace),
+        cron_expr: editCronExpr.trim(),
       };
       const res = await updateJob(id, payload);
       setJobs((prev) => prev.map((j) => (j.id === id ? res.job : j)));
@@ -986,7 +994,49 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
               ))}
             </select>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">Schedule type</label>
+            <div class="inline-flex rounded-full bg-slate-100 p-1">
+              {[
+                { key: "interval", label: "Interval" },
+                { key: "cron", label: "Cron expression" },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setScheduleMode(opt.key)}
+                  class={
+                    "px-3 py-1 rounded-full text-xs font-medium transition-colors " +
+                    (scheduleMode === opt.key
+                      ? "bg-white shadow-sm text-slate-900"
+                      : "text-slate-500 hover:text-slate-700")
+                  }
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {scheduleMode === "cron" ? (
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">
+                Cron expression (UTC)
+              </label>
+              <input
+                type="text"
+                class="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={cronExpr}
+                onInput={(e) => setCronExpr(e.target.value)}
+                placeholder="0 3 * * *"
+              />
+              <p class="mt-1 text-[11px] text-slate-500">
+                Standard 5-field syntax (minute hour day month weekday), e.g.{" "}
+                <code>0 3 * * *</code> = daily at 3am UTC. The job is "late" if
+                a heartbeat doesn't arrive by the next scheduled run plus the
+                grace period below.
+              </p>
+            </div>
+          ) : (
             <div>
               <label class="block text-xs text-slate-600 mb-1">
                 Expected interval (minutes)
@@ -999,22 +1049,28 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                 onInput={(e) => setIntervalMinutes(e.target.value)}
               />
             </div>
-            <div>
-              <label class="block text-xs text-slate-600 mb-1">
-                Grace period (minutes)
-              </label>
-              <input
-                type="number"
-                min="0"
-                class="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={graceMinutes}
-                onInput={(e) => setGraceMinutes(e.target.value)}
-              />
-            </div>
+          )}
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">
+              Grace period (minutes)
+            </label>
+            <input
+              type="number"
+              min="0"
+              class="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={graceMinutes}
+              onInput={(e) => setGraceMinutes(e.target.value)}
+            />
           </div>
           <button
             type="submit"
-            disabled={creating || !jobName.trim()}
+            disabled={
+              creating ||
+              !jobName.trim() ||
+              (scheduleMode === "cron"
+                ? !cronExpr.trim()
+                : !(Number(intervalMinutes) > 0))
+            }
             class="w-full mt-1 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-60 shadow-sm"
           >
             {creating ? "Creating job…" : "Add job"}
@@ -1226,6 +1282,21 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                               </div>
                               <div>
                                 <label class="block text-[10px] text-slate-500 mb-0.5">
+                                  Cron override (optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  value={editCronExpr}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onInput={(e) =>
+                                    setEditCronExpr(e.target.value)
+                                  }
+                                  placeholder="e.g. 0 3 * * * (blank = use interval)"
+                                />
+                              </div>
+                              <div>
+                                <label class="block text-[10px] text-slate-500 mb-0.5">
                                   Project
                                 </label>
                                 <select
@@ -1245,8 +1316,16 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                             </div>
                           ) : (
                             <>
-                              ~{Math.round(job.expected_interval_seconds / 60)}{" "}
-                              min
+                              {job.cron_expr ? (
+                                <span class="font-mono text-[11px]">
+                                  {job.cron_expr}
+                                </span>
+                              ) : (
+                                <>
+                                  ~{Math.round(job.expected_interval_seconds / 60)}{" "}
+                                  min
+                                </>
+                              )}
                               <div class="text-[10px] text-slate-500">
                                 grace {Math.round(job.grace_seconds / 60)} min
                               </div>
@@ -1429,12 +1508,25 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                       </span>
                     </div>
                     <div class="text-[10px] text-slate-500">
-                      Interval ~{" "}
-                      {Math.round(
-                        detailJob.expected_interval_seconds / 60
-                      )}{" "}
-                      min, grace{" "}
-                      {Math.round(detailJob.grace_seconds / 60)} min
+                      {detailJob.cron_expr ? (
+                        <>
+                          Schedule{" "}
+                          <span class="font-mono text-slate-700">
+                            {detailJob.cron_expr}
+                          </span>{" "}
+                          (UTC), grace{" "}
+                          {Math.round(detailJob.grace_seconds / 60)} min
+                        </>
+                      ) : (
+                        <>
+                          Interval ~{" "}
+                          {Math.round(
+                            detailJob.expected_interval_seconds / 60
+                          )}{" "}
+                          min, grace{" "}
+                          {Math.round(detailJob.grace_seconds / 60)} min
+                        </>
+                      )}
                     </div>
                     <div class="mt-1 flex items-center gap-2">
                       <span class="text-[10px] text-slate-500">Severity:</span>
@@ -1462,26 +1554,55 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                       </div>
                     </div>
                     {detailStats && (
-                      <div class="text-[10px] text-slate-500 mt-0.5">
-                        Last 7 days:&nbsp;
-                        <span
-                          class={
-                            "font-medium " +
-                            (detailStats.uptime_percent >= 99
-                              ? "text-emerald-700"
-                              : detailStats.uptime_percent >= 90
-                              ? "text-amber-700"
-                              : "text-red-700")
-                          }
-                        >
-                          {detailStats.uptime_percent.toFixed(1)}% on-time
-                        </span>
-                        {detailStats.total > 0 && (
-                          <span class="ml-1 text-[10px] text-slate-500">
-                            ({detailStats.ok} ok, {detailStats.late} late,{" "}
-                            {detailStats.total} runs)
+                      <div class="text-[10px] text-slate-500 mt-0.5 space-y-0.5">
+                        <div>
+                          Last 7 days:&nbsp;
+                          <span
+                            class={
+                              "font-medium " +
+                              (detailStats.uptime_percent >= 99
+                                ? "text-emerald-700"
+                                : detailStats.uptime_percent >= 90
+                                ? "text-amber-700"
+                                : "text-red-700")
+                            }
+                          >
+                            {detailStats.uptime_percent.toFixed(1)}% on-time
                           </span>
-                        )}
+                          {detailStats.total > 0 && (
+                            <span class="ml-1 text-[10px] text-slate-500">
+                              ({detailStats.ok} ok, {detailStats.late} late,{" "}
+                              {detailStats.fail || 0} fail,{" "}
+                              {detailStats.total} runs)
+                            </span>
+                          )}
+                        </div>
+                        {Array.isArray(detailStats.windows) &&
+                          detailStats.windows
+                            .filter((w) => w.days !== 7)
+                            .map((w) => (
+                              <div key={w.days}>
+                                Last {w.days} days:&nbsp;
+                                <span
+                                  class={
+                                    "font-medium " +
+                                    (w.uptime_percent >= 99
+                                      ? "text-emerald-700"
+                                      : w.uptime_percent >= 90
+                                      ? "text-amber-700"
+                                      : "text-red-700")
+                                  }
+                                >
+                                  {w.uptime_percent.toFixed(1)}% on-time
+                                </span>
+                                {w.total > 0 && (
+                                  <span class="ml-1 text-[10px] text-slate-500">
+                                    ({w.ok} ok, {w.late} late, {w.fail} fail,{" "}
+                                    {w.total} runs)
+                                  </span>
+                                )}
+                              </div>
+                            ))}
                       </div>
                     )}
                   </div>

@@ -23,11 +23,18 @@ import (
 // ---------- Requests / responses ----------
 
 type createJobRequest struct {
-	Name            string `json:"name" binding:"required"`
-	ProjectID       string `json:"project_id,omitempty"`
-	IntervalMinutes int    `json:"interval_minutes" binding:"required,min=1"`
+	Name      string `json:"name" binding:"required"`
+	ProjectID string `json:"project_id,omitempty"`
+	// IntervalMinutes is required unless CronExpr is set instead (validated
+	// in handleCreateJob, since binding tags can't express "one of two
+	// fields required").
+	IntervalMinutes int    `json:"interval_minutes"`
 	GraceMinutes    int    `json:"grace_minutes" binding:"min=0"`
 	Severity        string `json:"severity"`
+	// CronExpr, if set, switches the job to schedule-based (rather than
+	// interval-based) lateness checking. Standard 5-field crontab syntax,
+	// evaluated in UTC. See cron.go.
+	CronExpr string `json:"cron_expr,omitempty"`
 }
 
 type updateJobRequest struct {
@@ -42,6 +49,9 @@ type updateJobRequest struct {
 	Severity            *string  `json:"severity"`
 	MaintenanceMinutes  *int64   `json:"maintenance_minutes"`
 	MaintenanceUntil    *string  `json:"maintenance_until"` // ISO8601 string or "" to clear
+	// CronExpr: nil = leave untouched, "" = clear back to interval mode,
+	// non-empty = validate and set as the job's schedule.
+	CronExpr *string `json:"cron_expr,omitempty"`
 }
 
 type jobResponse struct {
@@ -54,6 +64,7 @@ type jobResponse struct {
 	LastHeartbeatAt      *time.Time `json:"last_heartbeat_at,omitempty"`
 	ExpectedIntervalSecs int        `json:"expected_interval_seconds"`
 	GraceSecs            int        `json:"grace_seconds"`
+	CronExpr             string     `json:"cron_expr,omitempty"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
 
@@ -74,11 +85,27 @@ type jobRunResponse struct {
 }
 
 type jobStatsResponse struct {
+	// Mirrors the 7-day window (windows[0]) at the top level so existing
+	// callers reading these fields directly keep working unchanged.
 	From          time.Time `json:"from"`
 	To            time.Time `json:"to"`
 	Total         int       `json:"total"`
 	Ok            int       `json:"ok"`
 	Late          int       `json:"late"`
+	Fail          int       `json:"fail"`
+	UptimePercent float64   `json:"uptime_percent"`
+
+	Windows []uptimeWindow `json:"windows"`
+}
+
+type uptimeWindow struct {
+	Days          int       `json:"days"`
+	From          time.Time `json:"from"`
+	To            time.Time `json:"to"`
+	Total         int       `json:"total"`
+	Ok            int       `json:"ok"`
+	Late          int       `json:"late"`
+	Fail          int       `json:"fail"`
 	UptimePercent float64   `json:"uptime_percent"`
 }
 
@@ -124,15 +151,14 @@ func projectLabel(ctx context.Context, coll *mongo.Collection, projectID primiti
 }
 
 func computeJobStatus(j *Job, now time.Time) string {
-	if j.LastHeartbeatAt == nil || j.LastHeartbeatAt.IsZero() {
+	late, _, ok := jobLateness(j, now)
+	if !ok {
 		return "never_seen"
 	}
-	elapsed := now.Sub(*j.LastHeartbeatAt)
-	threshold := time.Duration(j.ExpectedIntervalSecs+j.GraceSecs) * time.Second
-	if elapsed <= threshold {
-		return "ok"
+	if late {
+		return "late"
 	}
-	return "late"
+	return "ok"
 }
 
 // ---------- Jobs CRUD ----------
@@ -152,6 +178,21 @@ func (a *App) handleCreateJob(c *gin.Context) {
 
 	if req.GraceMinutes < 0 {
 		req.GraceMinutes = 0
+	}
+
+	req.CronExpr = strings.TrimSpace(req.CronExpr)
+	if req.CronExpr == "" && req.IntervalMinutes <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "either interval_minutes or cron_expr is required"})
+		return
+	}
+	if req.CronExpr != "" {
+		if _, err := ParseCronSchedule(req.CronExpr); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid cron_expr: %v", err)})
+			return
+		}
+	}
+	if req.IntervalMinutes < 0 {
+		req.IntervalMinutes = 0
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
@@ -218,6 +259,7 @@ func (a *App) handleCreateJob(c *gin.Context) {
 		Key:                  key,
 		ExpectedIntervalSecs: req.IntervalMinutes * 60,
 		GraceSecs:            req.GraceMinutes * 60,
+		CronExpr:             req.CronExpr,
 		CreatedAt:            now,
 		UpdatedAt:            now,
 
@@ -254,6 +296,7 @@ func (a *App) handleCreateJob(c *gin.Context) {
 		LastHeartbeatAt:      job.LastHeartbeatAt,
 		ExpectedIntervalSecs: job.ExpectedIntervalSecs,
 		GraceSecs:            job.GraceSecs,
+		CronExpr:             job.CronExpr,
 		CreatedAt:            job.CreatedAt,
 		UpdatedAt:            job.UpdatedAt,
 		AlertEmailEnabled:    job.AlertEmailEnabled,
@@ -313,6 +356,7 @@ func (a *App) handleListJobs(c *gin.Context) {
 			LastHeartbeatAt:      j.LastHeartbeatAt,
 			ExpectedIntervalSecs: j.ExpectedIntervalSecs,
 			GraceSecs:            j.GraceSecs,
+			CronExpr:             j.CronExpr,
 			CreatedAt:            j.CreatedAt,
 			UpdatedAt:            j.UpdatedAt,
 			AlertEmailEnabled:    j.AlertEmailEnabled,
@@ -380,6 +424,7 @@ func (a *App) handleGetJob(c *gin.Context) {
 		LastHeartbeatAt:      job.LastHeartbeatAt,
 		ExpectedIntervalSecs: job.ExpectedIntervalSecs,
 		GraceSecs:            job.GraceSecs,
+		CronExpr:             job.CronExpr,
 		CreatedAt:            job.CreatedAt,
 		UpdatedAt:            job.UpdatedAt,
 		AlertEmailEnabled:    job.AlertEmailEnabled,
@@ -616,6 +661,18 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 			update["maintenance_until"] = until
 		}
 	}
+	if req.CronExpr != nil {
+		expr := strings.TrimSpace(*req.CronExpr)
+		if expr == "" {
+			update["cron_expr"] = ""
+		} else {
+			if _, err := ParseCronSchedule(expr); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid cron_expr: %v", err)})
+				return
+			}
+			update["cron_expr"] = expr
+		}
+	}
 
 	if len(update) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
@@ -649,6 +706,7 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 		LastHeartbeatAt:      job.LastHeartbeatAt,
 		ExpectedIntervalSecs: job.ExpectedIntervalSecs,
 		GraceSecs:            job.GraceSecs,
+		CronExpr:             job.CronExpr,
 		CreatedAt:            job.CreatedAt,
 		UpdatedAt:            job.UpdatedAt,
 		AlertEmailEnabled:    job.AlertEmailEnabled,
@@ -921,30 +979,61 @@ func (a *App) handleJobStats(c *gin.Context) {
 	}
 
 	now := time.Now().UTC()
-	// 7-day window
-	from := now.Add(-7 * 24 * time.Hour)
 
+	var windows []uptimeWindow
+	for _, days := range []int{7, 30, 90} {
+		from := now.Add(-time.Duration(days) * 24 * time.Hour)
+		w, err := a.computeUptimeWindow(ctx, job.ID, u.ID, days, from, now)
+		if err != nil {
+			log.Printf("job stats window %dd: %v", days, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load stats"})
+			return
+		}
+		windows = append(windows, w)
+	}
+
+	// windows[0] is the 7-day window -- kept mirrored at the top level too
+	// so existing callers reading stats.total/ok/late/uptime_percent
+	// directly don't break.
+	primary := windows[0]
+	resp := jobStatsResponse{
+		From:          primary.From,
+		To:            primary.To,
+		Total:         primary.Total,
+		Ok:            primary.Ok,
+		Late:          primary.Late,
+		Fail:          primary.Fail,
+		UptimePercent: primary.UptimePercent,
+		Windows:       windows,
+	}
+
+	c.JSON(http.StatusOK, gin.H{"stats": resp})
+}
+
+// computeUptimeWindow tallies job_run outcomes in [from, to] and computes an
+// uptime percentage. "fail" (an explicit non-zero-exit heartbeat reported by
+// the CLI) counts as downtime exactly like a missed/late heartbeat -- this
+// used to only weigh ok vs late, so a job that failed every single run
+// without ever technically being *late* showed 100% uptime, which was wrong.
+func (a *App) computeUptimeWindow(ctx context.Context, jobID, userID primitive.ObjectID, days int, from, to time.Time) (uptimeWindow, error) {
 	cur, err := a.jobRunsColl.Find(ctx, bson.M{
-		"job_id":  job.ID,
-		"user_id": u.ID,
+		"job_id":  jobID,
+		"user_id": userID,
 		"at": bson.M{
 			"$gte": from,
-			"$lte": now,
+			"$lte": to,
 		},
 	})
 	if err != nil {
-		log.Printf("job stats find runs: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load stats"})
-		return
+		return uptimeWindow{}, fmt.Errorf("find runs: %w", err)
 	}
 	defer cur.Close(ctx)
 
-	var total, okCount, lateCount int
-
+	var total, okCount, lateCount, failCount int
 	for cur.Next(ctx) {
 		var r JobRun
 		if err := cur.Decode(&r); err != nil {
-			log.Printf("job stats decode run: %v", err)
+			log.Printf("uptime window decode run: %v", err)
 			continue
 		}
 		total++
@@ -953,27 +1042,30 @@ func (a *App) handleJobStats(c *gin.Context) {
 			okCount++
 		case "late":
 			lateCount++
+		case "fail":
+			failCount++
 		}
 	}
 	if err := cur.Err(); err != nil {
-		log.Printf("job stats cursor: %v", err)
+		log.Printf("uptime window cursor: %v", err)
 	}
 
+	denom := okCount + lateCount + failCount
 	uptime := 0.0
-	if okCount+lateCount > 0 {
-		uptime = float64(okCount) / float64(okCount+lateCount) * 100.0
+	if denom > 0 {
+		uptime = float64(okCount) / float64(denom) * 100.0
 	}
 
-	resp := jobStatsResponse{
+	return uptimeWindow{
+		Days:          days,
 		From:          from,
-		To:            now,
+		To:            to,
 		Total:         total,
 		Ok:            okCount,
 		Late:          lateCount,
+		Fail:          failCount,
 		UptimePercent: uptime,
-	}
-
-	c.JSON(http.StatusOK, gin.H{"stats": resp})
+	}, nil
 }
 
 // ---------- Public job endpoint ----------
@@ -1007,42 +1099,14 @@ func (a *App) handlePublicJob(c *gin.Context) {
 	now := time.Now().UTC()
 	from := now.Add(-7 * 24 * time.Hour)
 
-	cur, err := a.jobRunsColl.Find(ctx, bson.M{
-		"job_id": job.ID,
-		"at": bson.M{
-			"$gte": from,
-			"$lte": now,
-		},
-	})
+	// job.UserID is used here (rather than a request-scoped user, since
+	// this is an unauthenticated public endpoint) purely to scope the
+	// job_runs query the same way the authenticated stats endpoint does.
+	w, err := a.computeUptimeWindow(ctx, job.ID, job.UserID, 7, from, now)
 	if err != nil {
-		log.Printf("public job stats find runs: %v", err)
+		log.Printf("public job stats: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load stats"})
 		return
-	}
-	defer cur.Close(ctx)
-
-	var total, okCount, lateCount int
-	for cur.Next(ctx) {
-		var r JobRun
-		if err := cur.Decode(&r); err != nil {
-			log.Printf("public job stats decode run: %v", err)
-			continue
-		}
-		total++
-		switch r.Status {
-		case "ok":
-			okCount++
-		case "late":
-			lateCount++
-		}
-	}
-	if err := cur.Err(); err != nil {
-		log.Printf("public job stats cursor: %v", err)
-	}
-
-	percent := 0.0
-	if okCount+lateCount > 0 {
-		percent = float64(okCount) / float64(okCount+lateCount) * 100.0
 	}
 
 	var resp publicJobResponse
@@ -1051,10 +1115,10 @@ func (a *App) handlePublicJob(c *gin.Context) {
 	resp.ExpectedIntervalSecs = job.ExpectedIntervalSecs
 	resp.GraceSecs = job.GraceSecs
 	resp.LastHeartbeatAt = job.LastHeartbeatAt
-	resp.Uptime7d.Ok = okCount
-	resp.Uptime7d.Late = lateCount
-	resp.Uptime7d.Total = total
-	resp.Uptime7d.PercentOk = percent
+	resp.Uptime7d.Ok = w.Ok
+	resp.Uptime7d.Late = w.Late
+	resp.Uptime7d.Total = w.Total
+	resp.Uptime7d.PercentOk = w.UptimePercent
 
 	c.JSON(http.StatusOK, resp)
 }

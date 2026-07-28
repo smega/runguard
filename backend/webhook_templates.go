@@ -17,7 +17,7 @@ import (
 type createWebhookTemplateRequest struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
-	Type string `json:"type"` // "generic" | "slack" (optional)
+	Type string `json:"type"` // "generic" | "slack" | "discord" (optional)
 }
 
 func (a *App) handleListWebhookTemplates(c *gin.Context) {
@@ -144,6 +144,7 @@ func (a *App) handleDeleteWebhookTemplate(c *gin.Context) {
 const (
 	WebhookTemplateTypeGeneric = "generic"
 	WebhookTemplateTypeSlack   = "slack"
+	WebhookTemplateTypeDiscord = "discord"
 )
 
 func normalizeWebhookTemplateType(raw string) string {
@@ -151,6 +152,8 @@ func normalizeWebhookTemplateType(raw string) string {
 	switch s {
 	case WebhookTemplateTypeSlack:
 		return WebhookTemplateTypeSlack
+	case WebhookTemplateTypeDiscord:
+		return WebhookTemplateTypeDiscord
 	case "", WebhookTemplateTypeGeneric:
 		fallthrough
 	default:

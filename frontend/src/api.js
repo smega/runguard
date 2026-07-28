@@ -32,7 +32,7 @@ export const requestPasswordReset = (email) => request("/auth/password/reset/req
 export const confirmPasswordReset = (token, password) => request("/auth/password/reset/confirm", { method: "POST", body: JSON.stringify({ token, password }) });
 
 export const listJobs = () => request("/jobs", { method: "GET" });
-export const createJob = (name, intervalMinutes, graceMinutes, projectId = "") => request("/jobs", { method: "POST", body: JSON.stringify({ name, interval_minutes: intervalMinutes, grace_minutes: graceMinutes, project_id: projectId || undefined }) });
+export const createJob = (name, intervalMinutes, graceMinutes, projectId = "", cronExpr = "") => request("/jobs", { method: "POST", body: JSON.stringify({ name, interval_minutes: cronExpr ? undefined : intervalMinutes, grace_minutes: graceMinutes, project_id: projectId || undefined, cron_expr: cronExpr || undefined }) });
 export const updateJob = (id, payload) => request(`/jobs/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
 export const deleteJob = (id) => request(`/jobs/${id}`, { method: "DELETE" });
 export const getJob = (id) => request(`/jobs/${id}`);

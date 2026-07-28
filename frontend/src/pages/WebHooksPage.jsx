@@ -94,8 +94,8 @@ export default function WebhooksPage({ user }) {
       </h1>
       <p class="text-xs text-slate-500 mb-3">
         Define reusable webhook endpoints once, then attach them to individual
-        jobs on the Jobs page. Templates can target Slack or general JSON
-        receivers.
+        jobs on the Jobs page. Templates can target Slack, Discord, or general
+        JSON receivers.
       </p>
 
       {/* Create template */}
@@ -140,6 +140,7 @@ export default function WebhooksPage({ user }) {
               >
                 <option value="generic">Generic JSON</option>
                 <option value="slack">Slack (text payload)</option>
+                <option value="discord">Discord (content payload)</option>
               </select>
             </div>
           </div>
@@ -166,6 +167,29 @@ export default function WebhooksPage({ user }) {
             </div>
           )}
 
+          {type === "discord" && (
+            <div class="mt-2 text-[10px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p class="mb-1">
+                Discord incoming webhooks expect a payload with a{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  content
+                </code>{" "}
+                field, for example:
+              </p>
+              <pre class="bg-white border border-slate-200 rounded px-2 py-1 font-mono text-[9px] whitespace-pre overflow-x-auto">
+{`{ "content": "RunGuard: job 'nightly-report' is late (critical)." }`}
+              </pre>
+              <p class="mt-1">
+                Discord templates here automatically send a{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  content
+                </code>{" "}
+                message the same way Slack templates do, trimmed to Discord's
+                2000-character limit if needed.
+              </p>
+            </div>
+          )}
+
           <div class="flex items-center justify-between mt-2">
             <button
               type="submit"
@@ -176,11 +200,15 @@ export default function WebhooksPage({ user }) {
             </button>
             <div class="text-[11px] text-slate-500">
               Generic JSON templates receive the full RunGuard payload; Slack
-              templates receive a simplified{" "}
+              and Discord templates receive a simplified message field (
               <code class="font-mono text-[9px] bg-slate-50 border border-slate-200 rounded px-1 py-0.5">
                 text
               </code>{" "}
-              message.
+              /{" "}
+              <code class="font-mono text-[9px] bg-slate-50 border border-slate-200 rounded px-1 py-0.5">
+                content
+              </code>
+              ).
             </div>
           </div>
           {inlineMessage && (
@@ -233,11 +261,17 @@ export default function WebhooksPage({ user }) {
                       : tmpl.url || "—";
 
                   const typeLabel =
-                    tmpl.type === "slack" ? "Slack" : "Generic JSON";
+                    tmpl.type === "slack"
+                      ? "Slack"
+                      : tmpl.type === "discord"
+                      ? "Discord"
+                      : "Generic JSON";
                   const typeClasses =
                     "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border " +
                     (tmpl.type === "slack"
                       ? "bg-purple-50 border-purple-200 text-purple-700"
+                      : tmpl.type === "discord"
+                      ? "bg-indigo-50 border-indigo-200 text-indigo-700"
                       : "bg-slate-50 border-slate-200 text-slate-600");
 
                   return (
