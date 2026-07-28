@@ -5,6 +5,9 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -48,6 +51,15 @@ func main() {
 		incidentsColl:        db.Collection("incidents"),
 		webhookLogsColl:      db.Collection("webhook_logs"), // NEW
 		webhookTemplatesColl: db.Collection("webhook_templates"),
+		adminAuditColl:       db.Collection("admin_audit_log"),
+	}
+
+	// Promote any configured bootstrap admins. Idempotent — safe to run
+	// on every startup.
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		bootstrapAdmins(ctx, app)
+		cancel()
 	}
 
 	// Create index for job_runs (job_id + at desc)
@@ -125,7 +137,21 @@ func main() {
 	// start daily summary loop
 	go app.RunDailySummaryLoop()
 
+	// start trial-expiry loop
+	go app.RunTrialExpiryLoop()
+
 	r := gin.Default()
+
+	// Only trust X-Forwarded-For from configured reverse proxies (e.g. a
+	// local nginx). Without this, gin trusts every upstream by default,
+	// which means any client could spoof that header and get a different
+	// bucket in the per-IP rate limiter — i.e. bypass it entirely. An
+	// empty list (the default) means "trust nobody", which is safe but
+	// means everything behind a proxy is seen as one IP; set this to your
+	// proxy's address once you have one.
+	if err := r.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
+		log.Fatalf("invalid server.trusted_proxies: %v", err)
+	}
 
 	// CORS
 	r.Use(func(c *gin.Context) {
@@ -140,6 +166,10 @@ func main() {
 		}
 		c.Next()
 	})
+
+	// Infra-facing health check (load balancer / systemd / external uptime
+	// monitor). Deliberately outside /api and unauthenticated.
+	r.GET("/healthz", app.handleHealthz)
 
 	// Public heartbeat endpoint (no auth).
 	// Rate limited two ways: a generous per-IP cap (so one host running many
@@ -172,6 +202,18 @@ func main() {
 	{
 		account.GET("", app.handleGetAccount)
 		account.PATCH("", app.handleUpdateAccount)
+		account.POST("/logout-all", app.handleLogoutAllDevices)
+	}
+
+	// Admin-only user management/audit log. Replaces manually flipping
+	// is_admin in mongosh: promote/demote here is logged to
+	// admin_audit_log, and the last remaining admin can't be demoted.
+	admin := api.Group("/admin").Use(app.authMiddleware(), app.requireAdmin())
+	{
+		admin.GET("/users", app.handleAdminListUsers)
+		admin.POST("/users/:id/promote", app.handleAdminPromoteUser)
+		admin.POST("/users/:id/demote", app.handleAdminDemoteUser)
+		admin.GET("/audit-log", app.handleAdminAuditLog)
 	}
 
 	api.GET("/pricing", app.handlePublicPricing)
@@ -242,10 +284,36 @@ func main() {
 	{
 		public.GET("/job/:token", app.handlePublicJob)
 		public.GET("/cli/versions", app.handleCLIListVersions)
+		public.GET("/status", app.handlePublicStatus)
 	}
 
-	log.Printf("listening on %s", cfg.Server.Addr)
-	if err := r.Run(cfg.Server.Addr); err != nil {
-		log.Fatalf("server: %v", err)
+	srv := &http.Server{
+		Addr:    cfg.Server.Addr,
+		Handler: r,
+	}
+
+	// Serve in the background so we can watch for a shutdown signal below.
+	go func() {
+		log.Printf("listening on %s", cfg.Server.Addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server: %v", err)
+		}
+	}()
+
+	// Graceful shutdown: on SIGINT/SIGTERM (Ctrl-C, or `systemctl stop`),
+	// stop accepting new connections and give in-flight requests — an
+	// export streaming out, a webhook send, an alert loop tick — up to 15s
+	// to finish instead of being cut off mid-request.
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Printf("shutdown signal received, draining in-flight requests...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+	} else {
+		log.Printf("shutdown complete")
 	}
 }

@@ -4,6 +4,11 @@
 server:
   addr: ":8888"
   frontend_origin: "https://your-frontend-domain.example"
+  # If a reverse proxy (nginx, a CDN, etc) sits in front of this backend,
+  # list its address(es) here so X-Forwarded-For is trusted only from
+  # there — otherwise leave empty (safe default: trusts nothing).
+  trusted_proxies:
+    - "127.0.0.1"
 
 public_base_url: "https://your-domain.example"
 
@@ -19,6 +24,11 @@ auth:
   # any real deployment). Only use false for local development over http.
   cookie_secure: true
   cookie_domain: ""
+
+admin:
+  # Anyone listed here is auto-promoted to admin on every backend startup.
+  bootstrap_emails:
+    - "you@example.com"
 
 app:
   base_url: "https://your-domain.example"
@@ -48,9 +58,13 @@ plans:
     label: Free
     max_jobs: 1
     max_projects: 1
+    allow_webhooks: true
     allow_email_alerts: false
     allow_public_links: false
+    allow_daily_summary: true
     allow_exports: false
+    allow_multiple_projects: false
+    allow_pdf_export: false
     bullets:
       - Up to 1 monitored job
       - Webhook alerts
@@ -63,9 +77,13 @@ plans:
     label: Plus
     max_jobs: 5
     max_projects: 3
+    allow_webhooks: true
     allow_email_alerts: true
     allow_public_links: true
+    allow_daily_summary: true
     allow_exports: false
+    allow_multiple_projects: true
+    allow_pdf_export: false
     bullets:
       - Up to 5 monitored jobs
       - Webhook alerts
@@ -78,9 +96,13 @@ plans:
     label: Scale
     max_jobs: 20
     max_projects: 10
+    allow_webhooks: true
     allow_email_alerts: true
     allow_public_links: true
+    allow_daily_summary: true
     allow_exports: true
+    allow_multiple_projects: true
+    allow_pdf_export: true
     bullets:
       - Up to 20 monitored jobs
       - Webhook alerts

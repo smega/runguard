@@ -72,6 +72,10 @@ func (a *App) handleCreateWebhookTemplate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name and url are required"})
 		return
 	}
+	if err := validateWebhookURLScheme(url); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	tType := normalizeWebhookTemplateType(req.Type)
 

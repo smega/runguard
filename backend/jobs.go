@@ -552,6 +552,10 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 			if u == "" {
 				continue
 			}
+			if err := validateWebhookURLScheme(u); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 			if !seen[u] {
 				seen[u] = true
 				cleaned = append(cleaned, u)

@@ -18,6 +18,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	mongo "go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -50,6 +51,10 @@ type tokenConsumeRequest struct {
 
 type authClaims struct {
 	UserID string `json:"uid"`
+	// TV (token version) is compared against the user's current
+	// TokenVersion in authMiddleware. If they don't match, the token has
+	// been revoked (e.g. by a password change or "log out everywhere").
+	TV int `json:"tv"`
 	jwt.RegisteredClaims
 }
 
@@ -154,7 +159,7 @@ func (a *App) handleSignup(c *gin.Context) {
 		}
 	}
 
-	if err := a.setAuthCookie(c, user.ID.Hex()); err != nil {
+	if err := a.setAuthCookie(c, user.ID.Hex(), user.TokenVersion); err != nil {
 		log.Printf("set cookie: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "auth error"})
 		return
@@ -195,7 +200,7 @@ func (a *App) handleLogin(c *gin.Context) {
 		return
 	}
 
-	if err := a.setAuthCookie(c, user.ID.Hex()); err != nil {
+	if err := a.setAuthCookie(c, user.ID.Hex(), user.TokenVersion); err != nil {
 		log.Printf("set cookie: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "auth error"})
 		return
@@ -215,6 +220,43 @@ func (a *App) handleLogout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// handleLogoutAllDevices invalidates every previously issued token for this
+// user (by bumping token_version) and then issues a fresh cookie for the
+// current browser, so the caller stays logged in here while every other
+// session/token is immediately revoked.
+func (a *App) handleLogoutAllDevices(c *gin.Context) {
+	u, ok := c.MustGet("user").(*User)
+	if !ok || u == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "user missing in context"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	res := a.usersColl.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": u.ID},
+		bson.M{"$inc": bson.M{"token_version": 1}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	)
+
+	var updated User
+	if err := res.Decode(&updated); err != nil {
+		log.Printf("logout-all update user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "db error"})
+		return
+	}
+
+	if err := a.setAuthCookie(c, updated.ID.Hex(), updated.TokenVersion); err != nil {
+		log.Printf("logout-all set cookie: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "auth error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 func (a *App) handleMe(c *gin.Context) {
 	u, ok := c.MustGet("user").(*User)
 	if !ok || u == nil {
@@ -231,16 +273,18 @@ func (a *App) handleMe(c *gin.Context) {
 			"summary_hour_utc":      u.SummaryHourUTC,
 			"billing_status":        effectiveBillingStatus(u),
 			"trial_ends_at":         u.TrialEndsAt,
+			"is_admin":              u.IsAdmin,
 		},
 	})
 }
 
 // ---------- JWT helpers ----------
 
-func (a *App) setAuthCookie(c *gin.Context, userID string) error {
+func (a *App) setAuthCookie(c *gin.Context, userID string, tokenVersion int) error {
 	now := time.Now()
 	claims := authClaims{
 		UserID: userID,
+		TV:     tokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(30 * 24 * time.Hour)),
@@ -304,6 +348,11 @@ func (a *App) authMiddleware() gin.HandlerFunc {
 		if err != nil {
 			log.Printf("find user in middleware: %v", err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "db error"})
+			return
+		}
+
+		if claims.TV != user.TokenVersion {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session revoked, please log in again"})
 			return
 		}
 
@@ -455,7 +504,7 @@ func (a *App) handleMagicConsume(c *gin.Context) {
 		return
 	}
 
-	if err := a.setAuthCookie(c, user.ID.Hex()); err != nil {
+	if err := a.setAuthCookie(c, user.ID.Hex(), user.TokenVersion); err != nil {
 		log.Printf("set cookie magic: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "auth error"})
 		return
@@ -568,10 +617,15 @@ func (a *App) handlePasswordResetConfirm(c *gin.Context) {
 		return
 	}
 
-	// update user
+	// update user. Bumping token_version invalidates every session token
+	// that existed before this password change (including one an attacker
+	// might have obtained), not just the one used to request this reset.
 	_, err = a.usersColl.UpdateByID(ctx, t.UserID, bson.M{
 		"$set": bson.M{
 			"password_hash": string(hash),
+		},
+		"$inc": bson.M{
+			"token_version": 1,
 		},
 	})
 	if err != nil {
@@ -594,7 +648,7 @@ func (a *App) handlePasswordResetConfirm(c *gin.Context) {
 	// log the user in after reset
 	var user User
 	if err := a.usersColl.FindOne(ctx, bson.M{"_id": t.UserID}).Decode(&user); err == nil {
-		if err := a.setAuthCookie(c, user.ID.Hex()); err != nil {
+		if err := a.setAuthCookie(c, user.ID.Hex(), user.TokenVersion); err != nil {
 			log.Printf("set cookie after reset: %v", err)
 		}
 		c.JSON(http.StatusOK, gin.H{

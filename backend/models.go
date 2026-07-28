@@ -21,6 +21,7 @@ type App struct {
 	webhookLogsColl *mongo.Collection
 
 	webhookTemplatesColl *mongo.Collection
+	adminAuditColl       *mongo.Collection
 }
 
 type User struct {
@@ -44,6 +45,24 @@ type User struct {
 	TrialEndsAt           *time.Time `bson:"trial_ends_at,omitempty" json:"trial_ends_at,omitempty"`
 	PaidPlanActivatedAt   *time.Time `bson:"paid_plan_activated_at,omitempty" json:"paid_plan_activated_at,omitempty"`
 	IsAdmin               bool       `bson:"is_admin,omitempty" json:"is_admin"`
+
+	// TokenVersion is embedded in issued JWTs. Bumping it (e.g. on password
+	// change or an explicit "log out everywhere") immediately invalidates
+	// every previously issued token, since authMiddleware rejects any token
+	// whose version doesn't match the current value.
+	TokenVersion int `bson:"token_version,omitempty" json:"-"`
+}
+
+// AdminAuditEntry records an administrative action for accountability —
+// who did what, to whom, and when. Written by admin.go handlers.
+type AdminAuditEntry struct {
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	At          time.Time          `bson:"at" json:"at"`
+	ActorID     primitive.ObjectID `bson:"actor_id" json:"actor_id"`
+	ActorEmail  string             `bson:"actor_email" json:"actor_email"`
+	Action      string             `bson:"action" json:"action"` // "promote" | "demote"
+	TargetID    primitive.ObjectID `bson:"target_id" json:"target_id"`
+	TargetEmail string             `bson:"target_email" json:"target_email"`
 }
 
 type Token struct {

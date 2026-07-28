@@ -81,6 +81,17 @@ func InitMongo(cfg *Config) (*mongo.Database, error) {
 		log.Printf("failed to ensure jobs.user_id index: %v", err)
 	}
 
+	// admin_audit_log: read back by recency
+	auditColl := db.Collection("admin_audit_log")
+	if _, err := auditColl.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "at", Value: -1}},
+		Options: options.Index().
+			SetBackground(true).
+			SetName("idx_admin_audit_at"),
+	}); err != nil {
+		log.Printf("failed to ensure admin_audit_log.at index: %v", err)
+	}
+
 	return db, nil
 }
 

@@ -101,6 +101,55 @@ func effectiveBillingStatus(u *User) string {
 	return "inactive"
 }
 
+// RunTrialExpiryLoop periodically flips billing_status from "trialing" to
+// "trial_expired" once trial_ends_at has passed for anyone who never
+// actually subscribed. Without this, billing_status is set to "trialing" at
+// signup and — since a Stripe webhook is the only other thing that ever
+// changes it — stays "trialing" forever if the user never pays, so the
+// account page and admin panel show an indefinite trial instead of the
+// trial having actually ended.
+func (a *App) RunTrialExpiryLoop() {
+	const interval = 1 * time.Hour
+	log.Printf("[trial] starting trial-expiry loop (interval=%s)", interval)
+
+	// Run once immediately on startup, then on the ticker.
+	a.expireStaleTrials(context.Background())
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		a.expireStaleTrials(context.Background())
+	}
+}
+
+func (a *App) expireStaleTrials(parent context.Context) {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+
+	now := time.Now().UTC()
+	res, err := a.usersColl.UpdateMany(ctx,
+		bson.M{
+			"billing_status": "trialing",
+			"trial_ends_at":  bson.M{"$lt": now},
+			// billing_subscription_id is stored with omitempty, so an
+			// unconverted trial user may have the field missing entirely
+			// rather than present-and-empty — match both.
+			"$or": []bson.M{
+				{"billing_subscription_id": bson.M{"$exists": false}},
+				{"billing_subscription_id": ""},
+			},
+		},
+		bson.M{"$set": bson.M{"billing_status": "trial_expired"}},
+	)
+	if err != nil {
+		log.Printf("[trial] expire stale trials: %v", err)
+		return
+	}
+	if res.ModifiedCount > 0 {
+		log.Printf("[trial] marked %d expired trial(s) as trial_expired", res.ModifiedCount)
+	}
+}
+
 func (a *App) handlePublicPricing(c *gin.Context) {
 	c.JSON(http.StatusOK, publicPricingResponse{Provider: a.cfg.Billing.Provider, TrialDays: a.cfg.Billing.TrialDays, Plans: a.cfg.Plans, Billing: a.cfg.Billing.Plans})
 }

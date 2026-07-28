@@ -345,14 +345,53 @@ func buildWebhookBodyForType(tType string, payload map[string]interface{}) ([]by
 	}
 }
 
-func postJSONWithStatus(ctx context.Context, url string, body []byte) (int, error) {
+// webhookRetryDelays defines the backoff between delivery attempts. A
+// transient failure on the receiving end (a blip, a brief 500, a timeout)
+// used to just drop the alert after a single try; now it gets a few more
+// chances before giving up.
+var webhookRetryDelays = []time.Duration{2 * time.Second, 10 * time.Second}
+
+func postJSONWithStatus(ctx context.Context, rawURL string, body []byte) (int, error) {
+	if err := validateWebhookURLScheme(rawURL); err != nil {
+		return 0, fmt.Errorf("invalid webhook url: %w", err)
+	}
+
+	var lastCode int
+	var lastErr error
+
+	attempts := len(webhookRetryDelays) + 1
+	for attempt := 0; attempt < attempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return lastCode, ctx.Err()
+			case <-time.After(webhookRetryDelays[attempt-1]):
+			}
+		}
+
+		code, err := postJSONOnce(ctx, rawURL, body)
+		if err == nil {
+			return code, nil
+		}
+		lastCode, lastErr = code, err
+
+		// Don't retry on responses that mean "this will never succeed"
+		// (4xx other than 429) — only retry timeouts/network errors/5xx/429.
+		if code >= 400 && code < 500 && code != http.StatusTooManyRequests {
+			return code, err
+		}
+	}
+	return lastCode, lastErr
+}
+
+func postJSONOnce(ctx context.Context, url string, body []byte) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("build webhook request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := webhookHTTPClient.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("post webhook: %w", err)
 	}

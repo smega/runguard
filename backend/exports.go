@@ -15,7 +15,14 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// maxExportRows caps how many jobs a single export request will render.
+// Plan limits already keep normal accounts well under this, but an export
+// shouldn't be able to become an unbounded, on-demand load generator (e.g.
+// for an admin account, which isn't capped by a plan's max_jobs).
+const maxExportRows = 5000
 
 // one row in the export
 type jobExportRow struct {
@@ -38,7 +45,7 @@ func (a *App) buildJobExportRows(ctx context.Context, u *User, now time.Time) ([
 		"deleted_at": bson.M{"$exists": false},
 	}
 
-	cur, err := a.jobsColl.Find(ctx, filter)
+	cur, err := a.jobsColl.Find(ctx, filter, options.Find().SetLimit(maxExportRows))
 	if err != nil {
 		return nil, fmt.Errorf("find jobs for export: %w", err)
 	}

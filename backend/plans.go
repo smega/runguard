@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"log"
+	"strings"
+)
 
 const (
 	PlanFree  = "free"
@@ -22,20 +25,49 @@ type PlanFeatures struct {
 	AllowPDFExport       bool
 }
 
-var planMatrix = map[string]PlanFeatures{
-	PlanFree:  {ID: PlanFree, Label: "Free", MaxJobs: 1, MaxProjects: 1, AllowWebhooks: true, AllowJobEmailAlerts: false, AllowPublicLinks: false, AllowDailySummary: true, AllowExports: false, AllowMultipleProject: false, AllowPDFExport: false},
-	PlanPlus:  {ID: PlanPlus, Label: "Plus", MaxJobs: 5, MaxProjects: 3, AllowWebhooks: true, AllowJobEmailAlerts: true, AllowPublicLinks: true, AllowDailySummary: true, AllowExports: false, AllowMultipleProject: true, AllowPDFExport: false},
-	PlanScale: {ID: PlanScale, Label: "Scale", MaxJobs: 20, MaxProjects: 10, AllowWebhooks: true, AllowJobEmailAlerts: true, AllowPublicLinks: true, AllowDailySummary: true, AllowExports: true, AllowMultipleProject: true, AllowPDFExport: true},
+// hardcodedFreeFallback is only used if config.yml's plans list is empty or
+// missing the requested plan entirely (e.g. a bad deploy) — enforcement
+// should never panic or silently allow everything just because config is
+// incomplete. In normal operation this is never reached.
+var hardcodedFreeFallback = PlanFeatures{ID: PlanFree, Label: "Free", MaxJobs: 1, MaxProjects: 1, AllowDailySummary: true}
+
+// planFeaturesFromConfig converts a config.yml PlanConfig into the
+// PlanFeatures shape used for enforcement. config.yml (cfg.Plans) is the
+// single source of truth for plan limits/features — this used to be a
+// separate hardcoded map (planMatrix) that could silently drift from what
+// config.yml — and therefore the pricing/account pages — actually said.
+func planFeaturesFromConfig(p PlanConfig) PlanFeatures {
+	return PlanFeatures{
+		ID:                   p.ID,
+		Label:                p.Label,
+		MaxJobs:              p.MaxJobs,
+		MaxProjects:          p.MaxProjects,
+		AllowWebhooks:        p.AllowWebhooks,
+		AllowJobEmailAlerts:  p.AllowEmailAlerts,
+		AllowPublicLinks:     p.AllowPublicLinks,
+		AllowDailySummary:    p.AllowDailySummary,
+		AllowExports:         p.AllowExports,
+		AllowMultipleProject: p.AllowMultipleProject,
+		AllowPDFExport:       p.AllowPDFExport,
+	}
 }
 
-func getPlanFeatures(planID string) PlanFeatures {
+func (a *App) getPlanFeatures(planID string) PlanFeatures {
 	if planID == "" {
 		planID = PlanFree
 	}
-	if p, ok := planMatrix[planID]; ok {
-		return p
+	for _, p := range a.cfg.Plans {
+		if p.ID == planID {
+			return planFeaturesFromConfig(p)
+		}
 	}
-	return planMatrix[PlanFree]
+	for _, p := range a.cfg.Plans {
+		if p.ID == PlanFree {
+			return planFeaturesFromConfig(p)
+		}
+	}
+	log.Printf("plan %q not found in config.yml and no free plan configured — using built-in fallback limits", planID)
+	return hardcodedFreeFallback
 }
 
 func (a *App) getPlanByID(id string) PlanConfig {
@@ -54,7 +86,7 @@ func (a *App) getPlanByID(id string) PlanConfig {
 }
 
 func (a *App) getUserPlanFeatures(u *User) PlanFeatures {
-	base := getPlanFeatures(u.Plan)
+	base := a.getPlanFeatures(u.Plan)
 	if u != nil && u.IsAdmin {
 		base.AllowWebhooks = true
 		base.AllowJobEmailAlerts = true
