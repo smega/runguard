@@ -37,7 +37,7 @@ jobs:
       REMOTE_HOST: ${{ secrets.SSH_HOST }}
       SSH_KEY: ${{ github.workspace }}/deploy_key
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check required secrets are set
         run: |
@@ -63,7 +63,7 @@ jobs:
         if: ${{ inputs.target == 'backend' || inputs.target == 'all' }}
         run: echo "${{ secrets.BACKEND_CONFIG_YML }}" > backend/config.yml
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         if: ${{ inputs.target == 'backend' || inputs.target == 'all' }}
         with:
           go-version: "1.24"
@@ -72,7 +72,7 @@ jobs:
         if: ${{ inputs.target == 'backend' || inputs.target == 'all' }}
         run: bash _build/build_go.sh
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         if: ${{ inputs.target == 'frontend' || inputs.target == 'all' }}
         with:
           node-version: "20"
