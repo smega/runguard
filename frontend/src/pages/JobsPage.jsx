@@ -1322,11 +1322,11 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
               <table class="w-full table-fixed text-[11px] text-left">
                 <thead class="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-500">
                   <tr>
-                    <th class="w-[36%] py-2 px-2 font-medium">Name</th>
-                    <th class="w-[11%] py-2 px-2 font-medium">Status</th>
-                    <th class="w-[11%] py-2 px-2 font-medium">Severity</th>
-                    <th class="w-[22%] py-2 px-2 font-medium">Last heartbeat</th>
-                    <th class="w-[20%] py-2 px-2 font-medium text-right">Actions</th>
+                    <th class="w-[26%] py-2 px-2 font-medium">Name</th>
+                    <th class="w-[13%] py-2 px-2 font-medium">Status</th>
+                    <th class="w-[13%] py-2 px-2 font-medium">Severity</th>
+                    <th class="w-[26%] py-2 px-2 font-medium">Last heartbeat</th>
+                    <th class="w-[22%] py-2 px-2 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
