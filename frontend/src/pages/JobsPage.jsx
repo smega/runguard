@@ -37,6 +37,10 @@ export default function JobsPage({ user }) {
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [jobError, setJobError] = useState("");
 
+  // New-job creation now lives in a slide-over panel (rather than an
+  // always-open card at the top of the page) so the jobs list is the first
+  // thing visible when the page loads.
+  const [showNewJobPanel, setShowNewJobPanel] = useState(false);
   const [jobName, setJobName] = useState("");
   const [intervalMinutes, setIntervalMinutes] = useState(60);
   const [graceMinutes, setGraceMinutes] = useState(5);
@@ -177,6 +181,16 @@ export default function JobsPage({ user }) {
     }
   }, [selectedJobId]);
 
+  // Escape dismisses the New job slide-over, same as clicking its backdrop.
+  useEffect(() => {
+    if (!showNewJobPanel) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setShowNewJobPanel(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showNewJobPanel]);
+
   const isJobSilenced = (job) => {
     if (job.maintenance_mode === "until_success" || job.maintenance_mode === "manual") {
       return true;
@@ -292,6 +306,7 @@ export default function JobsPage({ user }) {
       setProjectId("");
       setCronExpr("");
       setScheduleMode("interval");
+      setShowNewJobPanel(false);
       pushToast("success", "Job created.");
     } catch (err) {
       console.error(err);
@@ -1018,7 +1033,16 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
 
   return (
     <div class="max-w-6xl mx-auto px-4 py-8">
-      <h1 class="text-2xl font-semibold text-slate-900 mb-1">Monitored jobs</h1>
+      <div class="flex items-start justify-between gap-3 mb-1">
+        <h1 class="text-2xl font-semibold text-slate-900">Monitored jobs</h1>
+        <button
+          type="button"
+          onClick={() => setShowNewJobPanel(true)}
+          class="shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-blue-600 text-white hover:bg-blue-500 shadow-sm"
+        >
+          + New job
+        </button>
+      </div>
       <p class="text-xs text-slate-500 mb-1">
         Define jobs, wire their heartbeats, and keep an eye on missed runs. This
         view refreshes automatically every ~15 seconds.
@@ -1046,9 +1070,30 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
         </p>
       )}
 
-      {/* New job card */}
-      <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-4">
-        <h2 class="text-sm font-semibold text-slate-900 mb-2">New job</h2>
+      {/* New job slide-over panel -- opened via the "+ New job" button above
+          rather than always taking up the top of the page, so the jobs list
+          is the first thing visible on load. Non-blocking: clicking the
+          backdrop or Escape dismisses it, same as the rest of the app's
+          side-panel/toast pattern. */}
+      {showNewJobPanel && (
+        <div class="fixed inset-0 z-50 flex justify-end">
+          <div
+            class="absolute inset-0 bg-slate-900/30"
+            onClick={() => setShowNewJobPanel(false)}
+          />
+          <div class="relative w-full max-w-md h-full bg-white shadow-2xl border-l border-slate-200 flex flex-col">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0">
+              <h2 class="text-sm font-semibold text-slate-900">New job</h2>
+              <button
+                type="button"
+                onClick={() => setShowNewJobPanel(false)}
+                class="text-slate-400 hover:text-slate-600 text-xl leading-none px-1"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4">
         <form class="space-y-3" onSubmit={handleCreateJob}>
           <div>
             <label class="block text-xs text-slate-600 mb-1">Job name</label>
@@ -1162,7 +1207,10 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
             </p>
           )}
         </form>
-      </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Jobs + detail split */}
       <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
@@ -1262,8 +1310,8 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
               <p class="text-[11px] text-slate-500 p-3">Loading jobs…</p>
             ) : filteredJobs.length === 0 ? (
               <p class="text-[11px] text-slate-500 p-3">
-                No jobs match this filter. Adjust your filter, or create a new
-                job above.
+                No jobs match this filter. Adjust your filter, or click "+ New
+                job" above to create one.
               </p>
             ) : (
               <table class="w-full text-[11px] text-left">
