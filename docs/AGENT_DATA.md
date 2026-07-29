@@ -6,6 +6,10 @@ cron jobs" is a reasonable thing to want documented before you point it at
 anything you care about — this is aimed at that self-hosted/homelab audience,
 not written as after-the-fact legal cover.
 
+The CLI itself is open source: [`github.com/smega/runguard-cli`](https://github.com/smega/runguard-cli).
+Everything described below is verifiable directly in that source rather than
+just asserted here.
+
 There are two commands that talk to the network: `wrap` and `register`.
 `self-update` also makes network calls (to fetch a new binary); that's
 covered separately at the bottom.

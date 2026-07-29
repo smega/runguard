@@ -8,6 +8,16 @@ for exactly what data the CLI sends and when, and
 [`docs/KUBERNETES.md`](docs/KUBERNETES.md) for monitoring Kubernetes
 CronJobs specifically.
 
+**The CLI is open source**, in its own standalone repo:
+[`github.com/smega/runguard-cli`](https://github.com/smega/runguard-cli)
+(stdlib-only, no dependency on this monorepo). That repo is the canonical
+public source for users who want to read or build the client themselves —
+its README is the public-facing version of `docs/AGENT_DATA.md`. The copy
+under `backend/cmd/runguard/` in this repo stays in sync by hand and remains
+the one wired into `_build/build_runguard_cli.sh` for signed release builds
+(that script also handles private distribution infra, which is why it isn't
+part of the public repo).
+
 
 # Admin access
 
