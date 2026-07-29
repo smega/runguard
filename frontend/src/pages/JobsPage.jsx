@@ -1510,7 +1510,7 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
               <p class="text-[11px] text-slate-500">No job details.</p>
             ) : (
               <div class="space-y-3">
-                <div class="flex items-start justify-between gap-3">
+                <div class="bg-white border border-slate-200 rounded-lg p-2.5 flex items-start justify-between gap-3">
                   <div>
                     <div class="text-xs font-semibold text-slate-900 mb-0.5">
                       {detailJob.name}
@@ -2221,7 +2221,7 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                 </div>
 
                 {/* runs as segments */}
-                <div>
+                <div class="bg-white border border-slate-200 rounded-lg p-2.5">
                   <div class="flex items-center justify-between mb-1">
                     <h3 class="text-[11px] font-semibold text-slate-900">
                       Recent runs (compressed)
@@ -2450,7 +2450,7 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                 </div>
 
                 {/* webhook deliveries */}
-                <div class="mt-3">
+                <div class="bg-white border border-slate-200 rounded-lg p-2.5">
                   <div class="flex items-center justify-between mb-1">
                     <h3 class="text-[11px] font-semibold text-slate-900">
                       Webhook deliveries
