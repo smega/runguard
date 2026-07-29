@@ -1319,14 +1319,14 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                 job" above to create one.
               </p>
             ) : (
-              <table class="w-full text-[11px] text-left">
+              <table class="w-full table-fixed text-[11px] text-left">
                 <thead class="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-500">
                   <tr>
-                    <th class="py-2 px-2 font-medium">Name</th>
-                    <th class="py-2 px-2 font-medium">Status</th>
-                    <th class="py-2 px-2 font-medium">Severity</th>
-                    <th class="py-2 px-2 font-medium">Last heartbeat</th>
-                    <th class="py-2 px-2 font-medium text-right">Actions</th>
+                    <th class="w-[36%] py-2 px-2 font-medium">Name</th>
+                    <th class="w-[11%] py-2 px-2 font-medium">Status</th>
+                    <th class="w-[11%] py-2 px-2 font-medium">Severity</th>
+                    <th class="w-[22%] py-2 px-2 font-medium">Last heartbeat</th>
+                    <th class="w-[20%] py-2 px-2 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1359,7 +1359,7 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                             />
                           ) : (
                             <div class="flex flex-col">
-                              <span class="text-slate-900 font-medium">
+                              <span class="text-slate-900 font-medium break-words">
                                 {job.name}
                               </span>
                               <span class="text-[10px] text-slate-500">
@@ -1422,7 +1422,7 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                           )}
                         </td>
                         <td class="py-2 px-2 align-top text-right">
-                          <div class="inline-flex flex-col gap-1">
+                          <div class="flex flex-col items-stretch gap-1">
                             {!isEditing && (
                               <button
                                 onClick={(e) => {
