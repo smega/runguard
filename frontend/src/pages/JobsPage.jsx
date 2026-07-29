@@ -341,6 +341,11 @@ export default function JobsPage({ user }) {
         interval_minutes: Number(editInterval),
         grace_minutes: Number(editGrace),
         cron_expr: editCronExpr.trim(),
+        // project_id was previously omitted here despite the edit form
+        // always having a Project selector -- changing it silently did
+        // nothing. "" clears the assignment (handleUpdateJob treats an
+        // empty project_id as "unassign").
+        project_id: editProjectId,
       };
       const res = await updateJob(id, payload);
       setJobs((prev) => prev.map((j) => (j.id === id ? res.job : j)));
@@ -1303,7 +1308,7 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
           </div>
         )}
 
-        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)] gap-4">
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)] gap-4">
           {/* left: jobs table */}
           <div class="max-h-[26rem] overflow-y-auto border border-slate-200 rounded-xl">
             {loadingJobs ? (
@@ -1321,8 +1326,6 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                     <th class="py-2 px-2 font-medium">Status</th>
                     <th class="py-2 px-2 font-medium">Severity</th>
                     <th class="py-2 px-2 font-medium">Last heartbeat</th>
-                    <th class="py-2 px-2 font-medium">Interval</th>
-                    <th class="py-2 px-2 font-medium">Alerts</th>
                     <th class="py-2 px-2 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1330,17 +1333,11 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                   {filteredJobs.map((job) => {
                     const isEditing = editingId === job.id;
                     const isDeleting = deletingId === job.id;
-                    const emailBusy = togglingEmailId === job.id;
-                    const webhookBusy = togglingWebhookId === job.id;
                     const selected = selectedJobId === job.id;
-
-                    const emailBtnDisabled = emailBusy || !emailAllowed;
 
                     const jobSilenced = isJobSilenced(job);
                     const rawJobMaintenance =
                       job.maintenance_until || job.maintenanceUntil;
-
-                    const lastWebhookStatus = job.last_webhook_status || null;
 
                     return (
                       <tr
@@ -1424,172 +1421,16 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                             </div>
                           )}
                         </td>
-                        <td class="py-2 px-2 align-top text-slate-700">
-                          {isEditing ? (
-                            <div class="flex flex-col gap-1">
-                              <div>
-                                <label class="block text-[10px] text-slate-500 mb-0.5">
-                                  Interval (min)
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  value={editInterval}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onInput={(e) =>
-                                    setEditInterval(e.target.value)
-                                  }
-                                />
-                              </div>
-                              <div>
-                                <label class="block text-[10px] text-slate-500 mb-0.5">
-                                  Grace (min)
-                                </label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  value={editGrace}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onInput={(e) =>
-                                    setEditGrace(e.target.value)
-                                  }
-                                />
-                              </div>
-                              <div>
-                                <label class="block text-[10px] text-slate-500 mb-0.5">
-                                  Cron override (optional)
-                                </label>
-                                <input
-                                  type="text"
-                                  class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  value={editCronExpr}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onInput={(e) =>
-                                    setEditCronExpr(e.target.value)
-                                  }
-                                  placeholder="e.g. 0 3 * * * (blank = use interval)"
-                                />
-                              </div>
-                              <div>
-                                <label class="block text-[10px] text-slate-500 mb-0.5">
-                                  Project
-                                </label>
-                                <select
-                                  class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  value={editProjectId}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => setEditProjectId(e.target.value)}
-                                >
-                                  <option value="">Unassigned</option>
-                                  {projects.map((project) => (
-                                    <option key={project.id} value={project.id}>
-                                      {project.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              {job.cron_expr ? (
-                                <span class="font-mono text-[11px]">
-                                  {job.cron_expr}
-                                </span>
-                              ) : (
-                                <>
-                                  ~{Math.round(job.expected_interval_seconds / 60)}{" "}
-                                  min
-                                </>
-                              )}
-                              <div class="text-[10px] text-slate-500">
-                                grace {Math.round(job.grace_seconds / 60)} min
-                              </div>
-                            </>
-                          )}
-                        </td>
-                        <td class="py-2 px-2 align-top">
-                          <div class="flex flex-col gap-1">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!emailAllowed) {
-                                  const msg =
-                                    "Email alerts are not available on your current plan.";
-                                  setJobError(msg);
-                                  pushToast("info", msg);
-                                  return;
-                                }
-                                handleToggleEmail(job);
-                              }}
-                              disabled={emailBtnDisabled}
-                              class={
-                                "px-2 py-1 rounded-full text-[11px] border " +
-                                (emailAllowed
-                                  ? job.alert_email_enabled
-                                    ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-                                    : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                                  : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed")
-                              }
-                              title={
-                                emailAllowed
-                                  ? ""
-                                  : "Upgrade your plan to enable email alerts"
-                              }
-                            >
-                              {emailBusy
-                                ? "Updating…"
-                                : !emailAllowed
-                                ? "Email (upgrade)"
-                                : job.alert_email_enabled
-                                ? "Email (beta) on"
-                                : "Email (beta) off"}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleWebhook(job);
-                              }}
-                              disabled={webhookBusy}
-                              class={
-                                "px-2 py-1 rounded-full text-[11px] border " +
-                                (job.alert_webhook_enabled
-                                  ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                                  : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100")
-                              }
-                            >
-                              {webhookBusy
-                                ? "Updating…"
-                                : job.alert_webhook_enabled
-                                ? "Webhooks on"
-                                : "Webhooks off"}
-                            </button>
-                            {lastWebhookStatus && (
-                              <span
-                                class={
-                                  "text-[9px] mt-0.5 inline-flex items-center " +
-                                  (lastWebhookStatus === "failed"
-                                    ? "text-rose-700"
-                                    : lastWebhookStatus === "success"
-                                    ? "text-emerald-700"
-                                    : "text-slate-500")
-                                }
-                              >
-                                {lastWebhookStatus === "failed" && (
-                                  <span class="mr-1">⚠︎</span>
-                                )}
-                                Last webhook: {lastWebhookStatus}
-                              </span>
-                            )}
-                          </div>
-                        </td>
                         <td class="py-2 px-2 align-top text-right">
                           <div class="inline-flex flex-col gap-1">
                             {!isEditing && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  // Schedule/grace/cron/project editing now
+                                  // lives in the detail panel on the right,
+                                  // so make sure it's showing this job.
+                                  handleRowClick(job);
                                   startEdit(job);
                                 }}
                                 class="px-2 py-1 rounded-full border border-slate-300 text-[11px] text-slate-700 hover:bg-slate-100"
@@ -1684,26 +1525,145 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                         {formatTimestamp(detailJob.last_heartbeat_at)}
                       </span>
                     </div>
-                    <div class="text-[10px] text-slate-500">
-                      {detailJob.cron_expr ? (
-                        <>
-                          Schedule{" "}
-                          <span class="font-mono text-slate-700">
-                            {detailJob.cron_expr}
-                          </span>{" "}
-                          (UTC), grace{" "}
-                          {Math.round(detailJob.grace_seconds / 60)} min
-                        </>
-                      ) : (
-                        <>
-                          Interval ~{" "}
-                          {Math.round(
-                            detailJob.expected_interval_seconds / 60
-                          )}{" "}
-                          min, grace{" "}
-                          {Math.round(detailJob.grace_seconds / 60)} min
-                        </>
-                      )}
+                    {editingId === detailJob.id ? (
+                      <div class="mt-1 space-y-1.5 bg-white border border-slate-200 rounded-lg p-2">
+                        <div>
+                          <label class="block text-[10px] text-slate-500 mb-0.5">
+                            Interval (min)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={editInterval}
+                            onInput={(e) => setEditInterval(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label class="block text-[10px] text-slate-500 mb-0.5">
+                            Grace (min)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={editGrace}
+                            onInput={(e) => setEditGrace(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label class="block text-[10px] text-slate-500 mb-0.5">
+                            Cron override (optional)
+                          </label>
+                          <input
+                            type="text"
+                            class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={editCronExpr}
+                            onInput={(e) => setEditCronExpr(e.target.value)}
+                            placeholder="e.g. 0 3 * * * (blank = use interval)"
+                          />
+                        </div>
+                        <div>
+                          <label class="block text-[10px] text-slate-500 mb-0.5">
+                            Project
+                          </label>
+                          <select
+                            class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value={editProjectId}
+                            onChange={(e) => setEditProjectId(e.target.value)}
+                          >
+                            <option value="">Unassigned</option>
+                            {projects.map((project) => (
+                              <option key={project.id} value={project.id}>
+                                {project.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <p class="text-[10px] text-slate-500">
+                          Use Save/Cancel in the jobs table row to apply or
+                          discard these changes.
+                        </p>
+                      </div>
+                    ) : (
+                      <div class="text-[10px] text-slate-500">
+                        {detailJob.cron_expr ? (
+                          <>
+                            Schedule{" "}
+                            <span class="font-mono text-slate-700">
+                              {detailJob.cron_expr}
+                            </span>{" "}
+                            (UTC), grace{" "}
+                            {Math.round(detailJob.grace_seconds / 60)} min
+                          </>
+                        ) : (
+                          <>
+                            Interval ~{" "}
+                            {Math.round(
+                              detailJob.expected_interval_seconds / 60
+                            )}{" "}
+                            min, grace{" "}
+                            {Math.round(detailJob.grace_seconds / 60)} min
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <div class="mt-1.5 flex items-center gap-1.5">
+                      <span class="text-[10px] text-slate-500">Alerts:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!emailAllowed) {
+                            const msg =
+                              "Email alerts are not available on your current plan.";
+                            setJobError(msg);
+                            pushToast("info", msg);
+                            return;
+                          }
+                          handleToggleEmail(detailJob);
+                        }}
+                        disabled={
+                          togglingEmailId === detailJob.id || !emailAllowed
+                        }
+                        class={
+                          "px-2 py-0.5 rounded-full text-[10px] border " +
+                          (emailAllowed
+                            ? detailJob.alert_email_enabled
+                              ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                              : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
+                            : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed")
+                        }
+                        title={
+                          emailAllowed
+                            ? ""
+                            : "Upgrade your plan to enable email alerts"
+                        }
+                      >
+                        {togglingEmailId === detailJob.id
+                          ? "Updating…"
+                          : !emailAllowed
+                          ? "Email (upgrade)"
+                          : detailJob.alert_email_enabled
+                          ? "Email on"
+                          : "Email off"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleWebhook(detailJob)}
+                        disabled={togglingWebhookId === detailJob.id}
+                        class={
+                          "px-2 py-0.5 rounded-full text-[10px] border " +
+                          (detailJob.alert_webhook_enabled
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                            : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100")
+                        }
+                      >
+                        {togglingWebhookId === detailJob.id
+                          ? "Updating…"
+                          : detailJob.alert_webhook_enabled
+                          ? "Webhooks on"
+                          : "Webhooks off"}
+                      </button>
                     </div>
                     <div class="mt-1 flex items-center gap-2">
                       <span class="text-[10px] text-slate-500">Severity:</span>
