@@ -1141,39 +1141,60 @@ func (a *App) handleJobStats(c *gin.Context) {
 // the CLI) counts as downtime exactly like a missed/late heartbeat -- this
 // used to only weigh ok vs late, so a job that failed every single run
 // without ever technically being *late* showed 100% uptime, which was wrong.
+//
+// This runs as a $group aggregation rather than streaming every raw run
+// document over the wire and counting client-side. A busy job's 90-day
+// window can be tens of thousands of documents, which as a plain Find()
+// meant dozens of getMore round-trips -- each one a fresh chance for a
+// flaky connection to die mid-stream, and (see below) a bug that made that
+// failure invisible. Grouping server-side returns only a handful of
+// (status, count) rows, so the whole thing is effectively one round-trip
+// regardless of how many documents matched.
 func (a *App) computeUptimeWindow(ctx context.Context, jobID, userID primitive.ObjectID, days int, from, to time.Time) (uptimeWindow, error) {
-	cur, err := a.jobRunsColl.Find(ctx, bson.M{
-		"job_id":  jobID,
-		"user_id": userID,
-		"at": bson.M{
-			"$gte": from,
-			"$lte": to,
-		},
-	})
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.M{
+			"job_id":  jobID,
+			"user_id": userID,
+			"at": bson.M{
+				"$gte": from,
+				"$lte": to,
+			},
+		}}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id":   "$status",
+			"count": bson.M{"$sum": 1},
+		}}},
+	}
+
+	cur, err := a.jobRunsColl.Aggregate(ctx, pipeline)
 	if err != nil {
-		return uptimeWindow{}, fmt.Errorf("find runs: %w", err)
+		return uptimeWindow{}, fmt.Errorf("aggregate runs: %w", err)
 	}
 	defer cur.Close(ctx)
 
+	var rows []struct {
+		Status string `bson:"_id"`
+		Count  int    `bson:"count"`
+	}
+	// cur.All also surfaces a cursor error that dies mid-stream as a real
+	// error, rather than the previous behavior of silently returning
+	// whatever partial counts had been read so far with no indication
+	// anything went wrong.
+	if err := cur.All(ctx, &rows); err != nil {
+		return uptimeWindow{}, fmt.Errorf("read aggregated runs: %w", err)
+	}
+
 	var total, okCount, lateCount, failCount int
-	for cur.Next(ctx) {
-		var r JobRun
-		if err := cur.Decode(&r); err != nil {
-			log.Printf("uptime window decode run: %v", err)
-			continue
-		}
-		total++
+	for _, r := range rows {
+		total += r.Count
 		switch r.Status {
 		case "ok":
-			okCount++
+			okCount += r.Count
 		case "late":
-			lateCount++
+			lateCount += r.Count
 		case "fail":
-			failCount++
+			failCount += r.Count
 		}
-	}
-	if err := cur.Err(); err != nil {
-		log.Printf("uptime window cursor: %v", err)
 	}
 
 	denom := okCount + lateCount + failCount
