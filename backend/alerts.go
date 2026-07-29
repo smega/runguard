@@ -305,7 +305,6 @@ func (a *App) sendJobWebhooksWithPayload(
 	return lastErr
 }
 
-
 func buildWebhookBodyForType(tType string, payload map[string]interface{}, urlStr string) ([]byte, error) {
 	switch strings.ToLower(tType) {
 	case WebhookTemplateTypeSlack:
