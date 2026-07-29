@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -1040,12 +1041,15 @@ func (a *App) handleJobStats(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer cancel()
+	// A short-lived, dedicated context just for the job lookup -- kept
+	// separate from the window queries below so a slow/flaky Mongo
+	// connection during the lookup can't eat into their budget too.
+	lookupCtx, lookupCancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer lookupCancel()
 
 	// ensure job belongs to this user
 	var job Job
-	if err := a.jobsColl.FindOne(ctx, bson.M{
+	if err := a.jobsColl.FindOne(lookupCtx, bson.M{
 		"_id":        id,
 		"user_id":    u.ID,
 		"deleted_at": bson.M{"$exists": false},
@@ -1061,22 +1065,63 @@ func (a *App) handleJobStats(c *gin.Context) {
 
 	now := time.Now().UTC()
 
+	// The 7/30/90-day windows are independent queries against the same
+	// collection. Previously they ran sequentially inside one shared
+	// 10-second context, so a single slow/flaky connection to Mongo (a
+	// transient network blip, not necessarily a slow query) could burn
+	// through the whole budget on the first window and starve the rest,
+	// turning one hiccup into a full 500 for the endpoint. Now each window
+	// gets its own timeout and runs concurrently, and a single window
+	// failing no longer takes the other two down with it.
+	daysList := []int{7, 30, 90}
+	type windowOutcome struct {
+		w   uptimeWindow
+		err error
+	}
+	outcomes := make([]windowOutcome, len(daysList))
+
+	var wg sync.WaitGroup
+	for i, days := range daysList {
+		wg.Add(1)
+		go func(i, days int) {
+			defer wg.Done()
+			wctx, wcancel := context.WithTimeout(c.Request.Context(), 8*time.Second)
+			defer wcancel()
+
+			from := now.Add(-time.Duration(days) * 24 * time.Hour)
+			w, err := a.computeUptimeWindow(wctx, job.ID, u.ID, days, from, now)
+			outcomes[i] = windowOutcome{w: w, err: err}
+		}(i, days)
+	}
+	wg.Wait()
+
 	var windows []uptimeWindow
-	for _, days := range []int{7, 30, 90} {
-		from := now.Add(-time.Duration(days) * 24 * time.Hour)
-		w, err := a.computeUptimeWindow(ctx, job.ID, u.ID, days, from, now)
-		if err != nil {
-			log.Printf("job stats window %dd: %v", days, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load stats"})
-			return
+	var primary *uptimeWindow
+	for i, o := range outcomes {
+		if o.err != nil {
+			log.Printf("job stats window %dd: %v", daysList[i], o.err)
+			continue
 		}
-		windows = append(windows, w)
+		windows = append(windows, o.w)
+		if daysList[i] == 7 {
+			w := o.w
+			primary = &w
+		}
 	}
 
-	// windows[0] is the 7-day window -- kept mirrored at the top level too
-	// so existing callers reading stats.total/ok/late/uptime_percent
-	// directly don't break.
-	primary := windows[0]
+	if len(windows) == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load stats"})
+		return
+	}
+
+	// windows[...] mirrors whichever window covers 7 days at the top level
+	// too, so existing callers reading stats.total/ok/late/uptime_percent
+	// directly don't break. If the 7-day window itself is the one that
+	// failed, fall back to the first window that did succeed rather than
+	// leaving these fields zeroed out.
+	if primary == nil {
+		primary = &windows[0]
+	}
 	resp := jobStatsResponse{
 		From:          primary.From,
 		To:            primary.To,

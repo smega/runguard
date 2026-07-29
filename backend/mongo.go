@@ -12,7 +12,23 @@ import (
 )
 
 func InitMongo(cfg *Config) (*mongo.Database, error) {
-	clientOpts := options.Client().ApplyURI(cfg.Mongo.URI)
+	// MaxConnIdleTime matters more than it looks: without it, a pooled
+	// connection can sit idle indefinitely and get silently killed by a
+	// NAT/firewall/load balancer somewhere on the path to Atlas without
+	// either side sending a FIN/RST. The driver doesn't find out until the
+	// next query tries to use that connection and stalls until the OS-level
+	// read times out -- which is exactly what a bare "i/o timeout" on an
+	// otherwise-idle connection looks like. Recycling idle connections
+	// before they get that stale avoids trading a healthy connection for a
+	// dead one. RetryReads/RetryWrites already default to true in this
+	// driver version, but are set explicitly here so a single dropped
+	// connection gets one automatic retry on a fresh one instead of
+	// surfacing straight to the request.
+	clientOpts := options.Client().
+		ApplyURI(cfg.Mongo.URI).
+		SetMaxConnIdleTime(3 * time.Minute).
+		SetRetryReads(true).
+		SetRetryWrites(true)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
