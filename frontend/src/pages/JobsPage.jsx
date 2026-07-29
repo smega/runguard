@@ -1322,11 +1322,10 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
               <table class="w-full table-fixed text-[11px] text-left">
                 <thead class="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-500">
                   <tr>
-                    <th class="w-[26%] py-2 px-2 font-medium">Name</th>
-                    <th class="w-[13%] py-2 px-2 font-medium">Status</th>
-                    <th class="w-[13%] py-2 px-2 font-medium">Severity</th>
-                    <th class="w-[26%] py-2 px-2 font-medium">Last heartbeat</th>
-                    <th class="w-[22%] py-2 px-2 font-medium text-right">Actions</th>
+                    <th class="w-[28%] py-2 px-2 font-medium">Name</th>
+                    <th class="w-[18%] py-2 px-2 font-medium">Status</th>
+                    <th class="w-[30%] py-2 px-2 font-medium">Last heartbeat</th>
+                    <th class="w-[24%] py-2 px-2 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1393,10 +1392,10 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                           )}
                         </td>
                         <td class="py-2 px-2 align-top">
-                          {renderStatusPill(job.status)}
-                        </td>
-                        <td class="py-2 px-2 align-top">
-                          {renderSeverityPill(job.severity)}
+                          <div class="flex flex-col items-start gap-1">
+                            {renderStatusPill(job.status)}
+                            {renderSeverityPill(job.severity)}
+                          </div>
                         </td>
                         <td class="py-2 px-2 align-top text-slate-700">
                           {formatTimestamp(job.last_heartbeat_at)}
