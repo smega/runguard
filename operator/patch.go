@@ -63,10 +63,17 @@ func monitorName(clusterName string, cj *batchv1.CronJob) string {
 	if v := cj.Annotations[annotationJobName]; v != "" {
 		return v
 	}
+	// Separated with "." rather than "/": the backend's register handler
+	// only strips spaces when turning a job name into a heartbeat key
+	// (strings.ReplaceAll(name, " ", "_")), so a literal "/" here would
+	// end up inside the key itself and break the /hb/:key route (the
+	// router stops matching :key at the next "/", producing a silent
+	// 404 on every heartbeat -- found by actually testing against a
+	// live cluster, not by inspection).
 	if clusterName != "" {
-		return fmt.Sprintf("%s/%s/%s", clusterName, cj.Namespace, cj.Name)
+		return fmt.Sprintf("%s.%s.%s", clusterName, cj.Namespace, cj.Name)
 	}
-	return fmt.Sprintf("%s/%s", cj.Namespace, cj.Name)
+	return fmt.Sprintf("%s.%s", cj.Namespace, cj.Name)
 }
 
 // secretName is the per-CronJob Secret this operator owns, holding the
