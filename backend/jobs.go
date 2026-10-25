@@ -21,6 +21,30 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// heartbeatKeySlug turns an arbitrary job name into the uppercase,
+// filesystem/URL-safe suffix used in a job's heartbeat key (rg_<token>_<slug>).
+// Replaces every character that isn't a plain ASCII letter or digit with
+// "_" -- not just spaces, since anything else (a "/" in particular) ends up
+// inside the key itself and breaks the /hb/:key route, which only matches
+// up to the next "/" in the path. Found by testing a job name containing
+// "/" against a live route, not by inspection.
+func heartbeatKeySlug(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	slug := strings.ToUpper(b.String())
+	if len(slug) > 32 {
+		slug = slug[:32]
+	}
+	return slug
+}
+
 // ---------- Requests / responses ----------
 
 type createJobRequest struct {
@@ -284,11 +308,7 @@ func (a *App) handleCreateJob(c *gin.Context) {
 		return
 	}
 
-	slug := strings.ToUpper(strings.ReplaceAll(req.Name, " ", "_"))
-	if len(slug) > 32 {
-		slug = slug[:32]
-	}
-	key := fmt.Sprintf("rg_%s_%s", token, slug)
+	key := fmt.Sprintf("rg_%s_%s", token, heartbeatKeySlug(req.Name))
 
 	now := time.Now().UTC()
 	sev := normalizeSeverity(req.Severity)

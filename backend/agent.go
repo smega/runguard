@@ -265,11 +265,7 @@ func (a *App) handleAgentRegister(c *gin.Context) {
 		return
 	}
 
-	slug := strings.ToUpper(strings.ReplaceAll(req.Name, " ", "_"))
-	if len(slug) > 32 {
-		slug = slug[:32]
-	}
-	key := fmt.Sprintf("rg_%s_%s", token, slug)
+	key := fmt.Sprintf("rg_%s_%s", token, heartbeatKeySlug(req.Name))
 
 	now := time.Now().UTC()
 	job := Job{
