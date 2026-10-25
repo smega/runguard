@@ -39,11 +39,18 @@ dependencies.
 ## Matching the cron schedule
 
 Since a CronJob's `schedule` field is itself a cron expression, create the
-matching RunGuard job with a cron expression rather than a plain interval
-(see the "Cron expression" schedule type on the job creation form, or pass
-`cron_expr` when calling the API / `runguard register`) — that way RunGuard's
-lateness detection lines up with when Kubernetes actually intends to run the
-job, instead of approximating it as a fixed interval.
+matching RunGuard job with a cron expression rather than a plain interval —
+that way RunGuard's lateness detection lines up with when Kubernetes actually
+intends to run the job, instead of approximating it as a fixed interval. Use
+the "Cron expression" schedule type on the job creation form, pass
+`cron_expr` to the raw API, or pass `--cron-expr` to `runguard register`:
+
+```yaml
+KEY=$(runguard register --token=$RUNGUARD_AGENT_TOKEN --name="nightly-orders-sync" --cron-expr="0 3 * * *" | grep 'Heartbeat key' | awk '{print $3}')
+```
+
+Reuse the exact same string as the CronJob's own `spec.schedule` so the two
+never drift apart.
 
 ## Self-registration instead of a pre-shared key
 
