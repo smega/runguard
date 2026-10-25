@@ -155,6 +155,12 @@ type agentRegisterRequest struct {
 	IntervalMinutes int    `json:"interval_minutes"`
 	GraceMinutes    int    `json:"grace_minutes"`
 	Severity        string `json:"severity"`
+	// CronExpr, if set, switches the job to schedule-based (rather than
+	// interval-based) lateness checking, same as createJobRequest.CronExpr
+	// in jobs.go. Lets a caller that already knows a cron expression (e.g.
+	// a Kubernetes CronJob's own spec.schedule) register a job that lines
+	// up with it exactly, instead of approximating with interval_minutes.
+	CronExpr string `json:"cron_expr,omitempty"`
 }
 
 type agentRegisterResponse struct {
@@ -187,7 +193,13 @@ func (a *App) handleAgentRegister(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
 		return
 	}
-	if req.IntervalMinutes <= 0 {
+	req.CronExpr = strings.TrimSpace(req.CronExpr)
+	if req.CronExpr != "" {
+		if _, err := ParseCronSchedule(req.CronExpr); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid cron_expr: %v", err)})
+			return
+		}
+	} else if req.IntervalMinutes <= 0 {
 		req.IntervalMinutes = 60 // default: expect at least hourly if the caller didn't say
 	}
 	if req.GraceMinutes < 0 {
@@ -266,6 +278,7 @@ func (a *App) handleAgentRegister(c *gin.Context) {
 		Key:                  key,
 		ExpectedIntervalSecs: req.IntervalMinutes * 60,
 		GraceSecs:            req.GraceMinutes * 60,
+		CronExpr:             req.CronExpr,
 		CreatedAt:            now,
 		UpdatedAt:            now,
 		AlertEmailEnabled:    false,
