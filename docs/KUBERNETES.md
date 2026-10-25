@@ -73,8 +73,19 @@ in the manifest.
 
 ## What this deliberately isn't
 
-There's no RunGuard Kubernetes operator, admission webhook, or auto-injection
-sidecar that wires up monitoring across a cluster without touching YAML. That
-would be a reasonable thing to build if there's real demand for it, but for
-now the plain `runguard wrap` approach above covers the same ground with a
-lot less to maintain on either side.
+There's no RunGuard admission webhook or auto-injection sidecar — a plain
+controller (not a webhook) turned out to cover the same ground with a lot
+less to maintain, see below.
+
+## Automatic auto-discovery and wrapping (`operator/`)
+
+If editing every CronJob's command by hand doesn't scale, `operator/` in
+this repo is a small controller that watches CronJobs across a cluster and,
+for any CronJob annotated `runguard.io/monitor: "true"`, automatically
+registers it (using its own `spec.schedule`) and patches its command to
+route through `runguard wrap` — no heartbeat key to copy, no manifest
+editing beyond the one annotation. See `operator/README.md` for setup and
+its one real limitation: it can only wrap a container that already sets an
+explicit `command` (it has no way to see what an image's own
+`ENTRYPOINT`/`CMD` would run). If that doesn't fit your CronJob, the manual
+approach above still works exactly the same.
