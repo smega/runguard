@@ -56,17 +56,30 @@ operator's next reconcile pass (within `--poll-interval`, default 30s) will:
 
 ## Install
 
+The image is built and published by `.github/workflows/operator-image.yml`
+to `ghcr.io/smega/runguard-operator`, but the GHCR package is **private**
+(it inherits the repo's visibility), so you need a pull secret even though
+you're pulling your own image:
+
 ```bash
+# Classic PAT with only the read:packages scope — create one at
+# https://github.com/settings/tokens, nothing broader is needed.
+kubectl create namespace runguard --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret docker-registry ghcr-pull-secret \
+  --namespace=runguard \
+  --docker-server=ghcr.io \
+  --docker-username=<your-github-username> \
+  --docker-password=<the-read:packages-PAT>
+
 kubectl apply -f deploy/rbac.yaml
-# edit deploy/deployment.yaml: set the real agent token, image, and any
+# edit deploy/deployment.yaml: set the real agent token, and any
 # --namespace / --cluster-name args you want
 kubectl apply -f deploy/deployment.yaml
 ```
 
-Build and push the image yourself for now (`docker build -t
-your-registry/runguard-operator:latest . && docker push ...`, then point
-`deploy/deployment.yaml`'s `image:` at it) — there's no public image
-published yet.
+If you'd rather not manage a pull secret, make the GHCR package public
+instead (package settings on GitHub) and drop the `imagePullSecrets` entry
+from `deploy/deployment.yaml`.
 
 ## Flags
 

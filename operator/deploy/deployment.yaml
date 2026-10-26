@@ -30,6 +30,8 @@ spec:
         app: runguard-operator
     spec:
       serviceAccountName: runguard-operator
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: operator
           image: ghcr.io/smega/runguard-operator:latest
