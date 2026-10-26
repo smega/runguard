@@ -1,0 +1,45 @@
+name: Operator image
+
+# Builds and publishes the ghcr.io/smega/runguard-operator image that
+# operator/deploy/deployment.yaml references. Multi-arch (amd64 + arm64)
+# since the home k3s cluster this gets deployed to runs on Raspberry Pis.
+# Uses the built-in GITHUB_TOKEN (granted packages: write below) — no
+# extra secrets needed, unlike deploy.yml.
+on:
+  push:
+    branches: ["main"]
+    paths: ["operator/**", ".github/workflows/operator-image.yml"]
+  workflow_dispatch: {}
+
+env:
+  IMAGE: ghcr.io/smega/runguard-operator
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: operator
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
