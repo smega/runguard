@@ -15,6 +15,7 @@ import {
   listWebhookTemplates,
   listProjects,
 } from "../api.js";
+import { PUBLIC_STATUS_BASE_URL } from "../siteConfig";
 
 const SNIPPET_TYPES = ["cron", "bash-wrapper", "systemd", "python", "node"];
 
@@ -26,7 +27,7 @@ const SEVERITY_OPTIONS = [
 ];
 
 // public read-only host
-const PUBLIC_BASE_URL = "https://runguard-public.smega.eu";
+const PUBLIC_BASE_URL = PUBLIC_STATUS_BASE_URL;
 
 // remembers the last job the user had open so re-visiting the page (or
 // reloading it) drops them back where they left off instead of a blank pane

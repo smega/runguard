@@ -1,3 +1,5 @@
+import { LEGAL_EMAIL } from "../siteConfig";
+
 export default function TermsPage() {
   return (
     <div class="max-w-4xl mx-auto px-4 py-10 space-y-6 text-sm text-slate-700 leading-relaxed">
@@ -150,7 +152,7 @@ export default function TermsPage() {
       <section class="space-y-2">
         <h2 class="text-lg font-semibold text-slate-900">11. Contact</h2>
         <p>
-          Questions about these terms: <a href="mailto:legal@runguard.smega.eu" class="text-indigo-600 hover:underline">legal@runguard.smega.eu</a>{" "}
+          Questions about these terms: <a href={`mailto:${LEGAL_EMAIL}`} class="text-indigo-600 hover:underline">{LEGAL_EMAIL}</a>{" "}
           (placeholder contact — will be updated alongside the legal entity name above).
         </p>
       </section>

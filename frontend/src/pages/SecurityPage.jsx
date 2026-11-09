@@ -1,3 +1,5 @@
+import { SECURITY_EMAIL } from "../siteConfig";
+
 export default function SecurityPage() {
   return (
     <div class="max-w-4xl mx-auto px-4 py-10 space-y-6 text-sm text-slate-700 leading-relaxed">
@@ -70,7 +72,7 @@ export default function SecurityPage() {
         <h2 class="text-lg font-semibold text-slate-900">Reporting a vulnerability</h2>
         <p>
           If you find a security issue, please email{" "}
-          <a href="mailto:security@runguard.smega.eu" class="text-indigo-600 hover:underline">security@runguard.smega.eu</a>{" "}
+          <a href={`mailto:${SECURITY_EMAIL}`} class="text-indigo-600 hover:underline">{SECURITY_EMAIL}</a>{" "}
           with details and, if possible, steps to reproduce. We'll acknowledge reports promptly and
           keep you updated as we investigate and fix. Please give us a reasonable window to address
           an issue before any public disclosure — as a small team, our response time won't match a

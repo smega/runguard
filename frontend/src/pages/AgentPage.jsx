@@ -1,6 +1,7 @@
 // src/pages/AgentPage.jsx
 import { h } from "preact";
 import { useEffect, useState } from "preact/hooks";
+import { CLI_DOWNLOAD_BASE, INSTALL_SCRIPT_URL } from "../siteConfig";
 
 export default function AgentPage() {
   const [cliInfo, setCliInfo] = useState(null);
@@ -77,11 +78,10 @@ export default function AgentPage() {
   }, []);
 
   const latest = cliInfo?.latest || "";
-  const downloadBase =
-    cliInfo?.download_base || "https://runguard-download.smega.eu";
+  const downloadBase = cliInfo?.download_base || CLI_DOWNLOAD_BASE;
   const versions = cliInfo?.versions || [];
 
-  const installScriptURL = "https://runguard.smega.eu/install.sh";
+  const installScriptURL = INSTALL_SCRIPT_URL;
 
   // Commands to show
   const quickInstallCmd = `curl -fsSL ${installScriptURL} | bash`;

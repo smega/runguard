@@ -1,3 +1,5 @@
+import { PUBLIC_BASE_URL } from "../siteConfig";
+
 export default function DocsPage() {
   return (
     <div class="max-w-4xl mx-auto px-4 py-10 space-y-8 text-sm text-slate-700 leading-relaxed">
@@ -25,7 +27,7 @@ export default function DocsPage() {
         </p>
         <pre class="bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-x-auto text-[12px] leading-snug font-mono">
 {`0 * * * * /opt/scripts/sync_orders.sh && \\
-  curl -fsS https://runguard.smega.eu/hb/ORDERS_SYNC >/dev/null`}
+  curl -fsS ${PUBLIC_BASE_URL}/hb/ORDERS_SYNC >/dev/null`}
         </pre>
         <p>
           That's the entire integration if you just want an "it ran" signal. If you also want exit
