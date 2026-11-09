@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Defaults baked into the script
-DEFAULT_DOWNLOAD_BASE="https://runguard-download.smega.eu"
-VERSIONS_API_URL_DEFAULT="https://runguard.smega.eu/api/public/cli/versions"
+# No defaults baked into this script on purpose — it's served from your own
+# RunGuard instance (or run standalone), so it has to be told where that
+# instance actually is via env vars or args. If you're distributing this
+# from your own instance, template/sed these in at deploy time, or just
+# always set RUNGUARD_DOWNLOAD_BASE / RUNGUARD_VERSIONS_API.
+DEFAULT_DOWNLOAD_BASE="${RUNGUARD_DOWNLOAD_BASE:-}"
+VERSIONS_API_URL_DEFAULT="${RUNGUARD_VERSIONS_API:-}"
+
+if [[ -z "${VERSIONS_API_URL_DEFAULT}" ]]; then
+  echo "ERROR: set RUNGUARD_VERSIONS_API (e.g. https://your-domain.example/api/public/cli/versions)" >&2
+  exit 1
+fi
 
 # Usage:
-#   bash install.sh [version-or-channel] [download_base]
+#   RUNGUARD_VERSIONS_API=... RUNGUARD_DOWNLOAD_BASE=... bash install.sh [version-or-channel] [download_base]
 #
 # version-or-channel:
 #   - latest  (default)
@@ -17,7 +26,7 @@ VERSIONS_API_URL_DEFAULT="https://runguard.smega.eu/api/public/cli/versions"
 #
 # If download_base is omitted:
 #   -> script uses download_base from the API when available,
-#      otherwise falls back to DEFAULT_DOWNLOAD_BASE.
+#      otherwise falls back to RUNGUARD_DOWNLOAD_BASE (if set).
 #
 # Install location selection:
 #   1) $RUNGUARD_INSTALL_DIR (if set)
@@ -25,10 +34,9 @@ VERSIONS_API_URL_DEFAULT="https://runguard.smega.eu/api/public/cli/versions"
 #   3) $HOME/.local/bin
 #   4) $HOME/bin
 #
-# Examples:
-#   curl -fsSL https://runguard.smega.eu/install.sh | bash
-#   curl -fsSL https://runguard.smega.eu/install.sh | bash -s -- stable
-#   curl -fsSL https://runguard.smega.eu/install.sh | bash -s -- 0.1.3
+# Examples (substitute your own RunGuard instance's domain):
+#   curl -fsSL https://your-domain.example/install.sh | RUNGUARD_VERSIONS_API=https://your-domain.example/api/public/cli/versions bash
+#   curl -fsSL https://your-domain.example/install.sh | RUNGUARD_VERSIONS_API=https://your-domain.example/api/public/cli/versions bash -s -- stable
 
 VERSION_ARG="${1:-latest}"
 
