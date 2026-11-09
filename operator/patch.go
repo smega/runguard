@@ -39,7 +39,6 @@ const (
 	volumeName                 = "runguard-bin"
 	volumeMountPath            = "/runguard-bin"
 	initContainerName          = "runguard-init"
-	binaryInstallURLDefault    = "https://runguard.smega.eu/install.sh"
 	secretKeyField             = "key"
 )
 
@@ -119,13 +118,10 @@ func applyInjection(cj *batchv1.CronJob, installURL string) injectionResult {
 		}
 	}
 
-	if url := installURL; url == "" {
-		url = binaryInstallURLDefault
-	} else {
-		installURL = url
-	}
 	if installURL == "" {
-		installURL = binaryInstallURLDefault
+		return injectionResult{
+			skippedReason: "no --install-url/RUNGUARD_INSTALL_URL configured; nothing to download the runguard binary from",
+		}
 	}
 
 	ensureVolume(podSpec)

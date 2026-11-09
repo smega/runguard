@@ -56,35 +56,36 @@ operator's next reconcile pass (within `--poll-interval`, default 30s) will:
 
 ## Install
 
-The image is built and published by `.github/workflows/operator-image.yml`
-to `ghcr.io/smega/runguard-operator`, but the GHCR package is **private**
-(it inherits the repo's visibility), so you need a pull secret even though
-you're pulling your own image:
+`.github/workflows/operator-image.yml` in this repo builds a multi-arch
+operator image on every push — fork it and point it at your own container
+registry (GHCR, Docker Hub, a self-hosted registry, whatever you use).
+
+If that registry is private — including a GHCR package you own, which
+inherits its repo's visibility — you'll need a pull secret even to pull your
+own image:
 
 ```bash
-# Classic PAT with only the read:packages scope — create one at
-# https://github.com/settings/tokens, nothing broader is needed.
 kubectl create namespace runguard --dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret docker-registry ghcr-pull-secret \
   --namespace=runguard \
-  --docker-server=ghcr.io \
-  --docker-username=<your-github-username> \
-  --docker-password=<the-read:packages-PAT>
+  --docker-server=<your-registry-host> \
+  --docker-username=<your-username> \
+  --docker-password=<a-read-only-token-or-password>
 
 kubectl apply -f deploy/rbac.yaml
-# edit deploy/deployment.yaml: set the real agent token, and any
-# --namespace / --cluster-name args you want
+# edit deploy/deployment.yaml: set the real image, agent token, --api, and
+# any --namespace / --cluster-name / RUNGUARD_INSTALL_URL you want
 kubectl apply -f deploy/deployment.yaml
 ```
 
-If you'd rather not manage a pull secret, make the GHCR package public
-instead (package settings on GitHub) and drop the `imagePullSecrets` entry
-from `deploy/deployment.yaml`.
+If you'd rather not manage a pull secret, make the registry package public
+instead and drop the commented `imagePullSecrets` entry in
+`deploy/deployment.yaml`.
 
 ## Flags
 
 ```
---api             RunGuard API base URL (default https://runguard.smega.eu)
+--api             RunGuard API base URL (or RUNGUARD_API env var) — required
 --agent-token     Agent token (or RUNGUARD_AGENT_TOKEN env var) — required
 --cluster-name    Prefix for registered job names, to disambiguate the same
                   namespace/name across multiple clusters on one account
@@ -92,8 +93,10 @@ from `deploy/deployment.yaml`.
                   ClusterRole in deploy/rbac.yaml; swap for a namespaced
                   Role if you only ever pass --namespace)
 --poll-interval   How often to re-scan for CronJobs (default 30s)
---install-url     Override where the init container downloads the runguard
-                  binary from (default https://runguard.smega.eu/install.sh)
+--install-url     URL the init container downloads the runguard binary from
+                  (or RUNGUARD_INSTALL_URL env var) — required for
+                  auto-wrapping; without it, CronJobs still get registered
+                  with RunGuard but are annotated as injection-skipped
 --kubeconfig      For local/out-of-cluster testing; uses in-cluster config
                   by default
 ```

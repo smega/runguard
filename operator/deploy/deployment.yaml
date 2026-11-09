@@ -30,12 +30,20 @@ spec:
         app: runguard-operator
     spec:
       serviceAccountName: runguard-operator
-      imagePullSecrets:
-        - name: ghcr-pull-secret
+      # If your image registry is private (even to yourself — e.g. a GHCR
+      # package that inherits a private repo's visibility), uncomment this
+      # and create the secret first:
+      #   kubectl create secret docker-registry ghcr-pull-secret -n runguard \
+      #     --docker-server=... --docker-username=... --docker-password=...
+      # imagePullSecrets:
+      #   - name: ghcr-pull-secret
       containers:
         - name: operator
-          image: ghcr.io/smega/runguard-operator:latest
+          # Built by .github/workflows/operator-image.yml in this repo —
+          # point it at wherever you publish that image for your own fork.
+          image: your-registry/runguard-operator:latest
           args:
+            - --api=https://your-runguard-instance.example  # required
             # - --namespace=my-namespace   # omit to watch all namespaces
             # - --cluster-name=home-k3s    # set if one RunGuard account spans multiple clusters
             - --poll-interval=30s
@@ -45,6 +53,9 @@ spec:
                 secretKeyRef:
                   name: runguard-operator-token
                   key: agent-token
+            # Required for auto-wrapping (see README "Limitations"):
+            # - name: RUNGUARD_INSTALL_URL
+            #   value: "https://your-runguard-instance.example/install.sh"
           resources:
             requests:
               cpu: 10m

@@ -44,16 +44,19 @@ const version = "0.1.0"
 
 func main() {
 	var (
-		apiBase      = flag.String("api", envOr("RUNGUARD_API", "https://runguard.smega.eu"), "RunGuard API base URL")
+		apiBase      = flag.String("api", envOr("RUNGUARD_API", ""), "RunGuard API base URL (or RUNGUARD_API env var) — required")
 		agentToken   = flag.String("agent-token", os.Getenv("RUNGUARD_AGENT_TOKEN"), "RunGuard agent token (or RUNGUARD_AGENT_TOKEN env var)")
 		clusterName  = flag.String("cluster-name", os.Getenv("RUNGUARD_CLUSTER_NAME"), "Optional label prefixed onto registered job names, to disambiguate CronJobs with the same namespace/name across multiple clusters on one RunGuard account")
 		namespace    = flag.String("namespace", "", "Restrict to one namespace (default: all namespaces — requires the ClusterRole in deploy/)")
 		pollInterval = flag.Duration("poll-interval", 30*time.Second, "How often to re-scan for CronJobs")
-		installURL   = flag.String("install-url", "", "Override the URL the init container downloads the runguard binary from (default: "+binaryInstallURLDefault+")")
+		installURL   = flag.String("install-url", envOr("RUNGUARD_INSTALL_URL", ""), "URL the init container downloads the runguard binary from (or RUNGUARD_INSTALL_URL env var) — required for auto-wrapping; without it, CronJobs still get registered but are annotated as skipped")
 		kubeconfig   = flag.String("kubeconfig", "", "Path to kubeconfig (default: in-cluster config; falls back to ~/.kube/config for local dev)")
 	)
 	flag.Parse()
 
+	if *apiBase == "" {
+		log.Fatal("--api or RUNGUARD_API is required (the base URL of your RunGuard instance)")
+	}
 	if *agentToken == "" {
 		log.Fatal("--agent-token or RUNGUARD_AGENT_TOKEN is required (find it on the account page)")
 	}
