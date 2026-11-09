@@ -6,6 +6,9 @@ inside a container as it does on a bare VPS. Wrap the container's actual
 command with `runguard wrap` and heartbeats work exactly as they would
 anywhere else.
 
+`https://runguard.example.com` below is a placeholder — substitute wherever
+you host your own RunGuard backend.
+
 ## Minimal example
 
 ```yaml
@@ -26,7 +29,7 @@ spec:
                 - /bin/sh
                 - -c
                 - |
-                  curl -fsSL https://runguard.smega.eu/install.sh | sh
+                  curl -fsSL https://runguard.example.com/install.sh | sh
                   runguard wrap --key=YOUR_HEARTBEAT_KEY -- /app/orders_sync.sh
           restartPolicy: OnFailure
 ```
@@ -63,7 +66,7 @@ command:
   - /bin/sh
   - -c
   - |
-    curl -fsSL https://runguard.smega.eu/install.sh | sh
+    curl -fsSL https://runguard.example.com/install.sh | sh
     KEY=$(runguard register --token=$RUNGUARD_AGENT_TOKEN --name="nightly-orders-sync" --interval=1440 | grep 'Heartbeat key' | awk '{print $3}')
     runguard wrap --key="$KEY" -- /app/orders_sync.sh
 ```
