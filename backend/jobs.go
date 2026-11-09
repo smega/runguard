@@ -262,11 +262,9 @@ func (a *App) handleCreateJob(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	// --- PLAN LIMIT ENFORCEMENT ---
-	plan := a.getPlanByID(u.Plan)
-
+	// --- JOB LIMIT ENFORCEMENT ---
 	// admins: no hard job limit
-	if !u.IsAdmin && plan.MaxJobs > 0 {
+	if !u.IsAdmin && a.cfg.Limits.MaxJobsPerUser > 0 {
 		count, err := a.jobsColl.CountDocuments(ctx, bson.M{
 			"user_id":    u.ID,
 			"deleted_at": bson.M{"$exists": false},
@@ -276,15 +274,15 @@ func (a *App) handleCreateJob(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "db error"})
 			return
 		}
-		if int(count) >= plan.MaxJobs {
+		if int(count) >= a.cfg.Limits.MaxJobsPerUser {
 			c.JSON(http.StatusForbidden, gin.H{
-				"error":    "job limit reached for your plan",
-				"max_jobs": plan.MaxJobs,
+				"error":    "job limit reached",
+				"max_jobs": a.cfg.Limits.MaxJobsPerUser,
 			})
 			return
 		}
 	}
-	// --- END PLAN LIMIT ---
+	// --- END JOB LIMIT ---
 
 	var projectID primitive.ObjectID
 	if strings.TrimSpace(req.ProjectID) != "" {
@@ -595,7 +593,6 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 	}
 
 	u := c.MustGet("user").(*User)
-	plan := a.getUserPlanFeatures(u)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
@@ -644,12 +641,6 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 		update["grace_seconds"] = (*req.GraceMinutes) * 60
 	}
 	if req.AlertEmailEnabled != nil {
-		if *req.AlertEmailEnabled && !plan.AllowJobEmailAlerts {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": "email alerts are not available on your plan",
-			})
-			return
-		}
 		update["alert_email_enabled"] = *req.AlertEmailEnabled
 	}
 	if req.AlertWebhookEnabled != nil {
@@ -678,12 +669,6 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 		update["alert_webhook_urls"] = cleaned
 	}
 	if req.PublicEnabled != nil {
-		if *req.PublicEnabled && !plan.AllowPublicLinks {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": "public status links are not available on your plan",
-			})
-			return
-		}
 		update["publicEnabled"] = *req.PublicEnabled
 
 		// If turning public on and no token yet, generate one
@@ -990,16 +975,7 @@ func (a *App) insertJobRunWithExtras(
 		return nil
 	}
 
-	// 3) plan-based limits
-	limits := captureLimitsFor("free", false)
-	if a.usersColl != nil {
-		var u User
-		if err := a.usersColl.FindOne(ctx, bson.M{"_id": job.UserID}).Decode(&u); err == nil {
-			limits = captureLimitsFor(u.Plan, u.IsAdmin)
-		} else {
-			log.Printf("insertJobRunWithExtras: load user failed, treating as free: %v", err)
-		}
-	}
+	limits := defaultCaptureLimits()
 
 	stdoutTail := makeLogTail(payload.StdoutTail, limits.MaxStdout)
 	stderrTail := makeLogTail(payload.StderrTail, limits.MaxStderr)

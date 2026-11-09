@@ -69,7 +69,7 @@ export default function JobsPage({ user }) {
   const [togglingWebhookId, setTogglingWebhookId] = useState(null);
   const [togglingPublicId, setTogglingPublicId] = useState(null);
 
-  // account / plan
+  // account (used for the job limit, see max_jobs)
   const [account, setAccount] = useState(null);
   const [accountLoading, setAccountLoading] = useState(true);
   const [accountError, setAccountError] = useState("");
@@ -126,7 +126,7 @@ export default function JobsPage({ user }) {
     return () => clearInterval(id);
   }, [user]);
 
-  // Load account / plan once per login
+  // Load account once per login
   useEffect(() => {
     if (!user) return;
     loadAccount();
@@ -244,7 +244,7 @@ export default function JobsPage({ user }) {
     } catch (err) {
       console.error("load account", err);
       if (!silent) {
-        setAccountError(err.message || "Failed to load account/plan info.");
+        setAccountError(err.message || "Failed to load account info.");
       }
     } finally {
       if (!silent) {
@@ -279,12 +279,11 @@ export default function JobsPage({ user }) {
     e.preventDefault();
     if (!jobName.trim()) return;
 
-    const plan = account?.plan;
-    const maxJobs = plan?.max_jobs ?? null;
+    const maxJobs = account?.max_jobs || null;
     const jobsUsed = jobs.length;
 
     if (maxJobs && jobsUsed >= maxJobs) {
-      const msg = `Job limit reached for your current plan (max ${maxJobs} jobs).`;
+      const msg = `Job limit reached (max ${maxJobs} jobs).`;
       setJobError(msg);
       pushToast("info", msg);
       return;
@@ -404,14 +403,6 @@ export default function JobsPage({ user }) {
   };
 
   const handleToggleEmail = async (job) => {
-    const plan = account?.plan;
-    if (plan && !plan.allow_email_alerts) {
-      const msg = "Email alerts are not available on your current plan.";
-      setJobError(msg);
-      pushToast("info", msg);
-      return;
-    }
-
     setTogglingEmailId(job.id);
     setJobError("");
     try {
@@ -452,14 +443,6 @@ export default function JobsPage({ user }) {
   };
 
   const handleTogglePublic = async (job) => {
-    const plan = account?.plan;
-    if (plan && !plan.allow_public_links) {
-      const msg = "Public status links are not available on your current plan.";
-      setJobError(msg);
-      pushToast("info", msg);
-      return;
-    }
-
     setTogglingPublicId(job.id);
     setJobError("");
     try {
@@ -1031,11 +1014,8 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
     }
   };
 
-  const plan = account?.plan || null;
-  const maxJobs = plan?.max_jobs ?? null;
+  const maxJobs = account?.max_jobs || null;
   const jobsUsed = jobs.length;
-  const emailAllowed = !plan || plan.allow_email_alerts;
-  const publicAllowed = !plan || plan.allow_public_links;
 
   return (
     <div class="max-w-6xl mx-auto px-4 py-8">
@@ -1054,25 +1034,16 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
         view refreshes automatically every ~15 seconds.
       </p>
       <p class="text-[11px] text-slate-500 mb-2">
-        Webhook alerts are included by default. Email alerts and public status
-        links depend on your plan.
+        Webhook, email, and public status links are all available on every job.
       </p>
-      {plan && (
+      {typeof maxJobs === "number" && maxJobs > 0 && (
         <p class="text-[11px] text-slate-500 mb-3">
-          Plan: <span class="font-medium">{plan.label}</span>{" "}
-          {typeof maxJobs === "number" && maxJobs > 0 && (
-            <>
-              • Jobs used:{" "}
-              <span class="font-medium">
-                {jobsUsed}/{maxJobs}
-              </span>
-            </>
-          )}
+          Jobs used: <span class="font-medium">{jobsUsed}/{maxJobs}</span>
         </p>
       )}
       {accountError && (
         <p class="text-[11px] text-amber-700 mb-2">
-          {accountError} (plan info may be incomplete)
+          {accountError}
         </p>
       )}
 
@@ -1207,9 +1178,9 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
           >
             {creating ? "Creating job…" : "Add job"}
           </button>
-          {plan && typeof maxJobs === "number" && maxJobs > 0 && (
+          {typeof maxJobs === "number" && maxJobs > 0 && (
             <p class="mt-2 text-[11px] text-slate-500 text-center">
-              Jobs: {jobsUsed}/{maxJobs} on {plan.label} plan
+              Jobs: {jobsUsed}/{maxJobs}
             </p>
           )}
         </form>
@@ -1612,37 +1583,17 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                       <span class="text-[10px] text-slate-500">Alerts:</span>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!emailAllowed) {
-                            const msg =
-                              "Email alerts are not available on your current plan.";
-                            setJobError(msg);
-                            pushToast("info", msg);
-                            return;
-                          }
-                          handleToggleEmail(detailJob);
-                        }}
-                        disabled={
-                          togglingEmailId === detailJob.id || !emailAllowed
-                        }
+                        onClick={() => handleToggleEmail(detailJob)}
+                        disabled={togglingEmailId === detailJob.id}
                         class={
                           "px-2 py-0.5 rounded-full text-[10px] border " +
-                          (emailAllowed
-                            ? detailJob.alert_email_enabled
-                              ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-                              : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"
-                            : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed")
-                        }
-                        title={
-                          emailAllowed
-                            ? ""
-                            : "Upgrade your plan to enable email alerts"
+                          (detailJob.alert_email_enabled
+                            ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                            : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100")
                         }
                       >
                         {togglingEmailId === detailJob.id
                           ? "Updating…"
-                          : !emailAllowed
-                          ? "Email (upgrade)"
                           : detailJob.alert_email_enabled
                           ? "Email on"
                           : "Email off"}
@@ -1752,8 +1703,8 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                       Refresh
                     </button>
                     <p class="text-[10px] text-slate-500 text-right max-w-[11rem]">
-                      Email alerts, public links, exports, and log capture vary
-                      by plan. Webhook alerts are included on all tiers.
+                      Email alerts, public links, exports, and webhook alerts
+                      are all available on every job.
                     </p>
                   </div>
                 </div>
@@ -1893,31 +1844,29 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                 })()}
 
                 {/* Per-job run history export */}
-                {(!plan || plan.allow_exports) && (
-                  <div class="bg-white border border-slate-200 rounded-lg p-2.5">
-                    <h3 class="text-[11px] font-semibold text-slate-900 mb-1">
-                      Export run history
-                    </h3>
-                    <p class="text-[10px] text-slate-500 mb-2">
-                      Download this job's own run history (status, exit code,
-                      duration, tags) as CSV or Excel.
-                    </p>
-                    <div class="flex flex-wrap gap-2">
-                      <a
-                        href={`/api/jobs/${detailJob.id}/export/runs.csv`}
-                        class="px-3 py-1.5 rounded-full text-[11px] bg-slate-900 text-white hover:bg-slate-800"
-                      >
-                        Download CSV
-                      </a>
-                      <a
-                        href={`/api/jobs/${detailJob.id}/export/runs.xlsx`}
-                        class="px-3 py-1.5 rounded-full text-[11px] bg-slate-100 text-slate-900 border border-slate-200 hover:bg-slate-200"
-                      >
-                        Download Excel
-                      </a>
-                    </div>
+                <div class="bg-white border border-slate-200 rounded-lg p-2.5">
+                  <h3 class="text-[11px] font-semibold text-slate-900 mb-1">
+                    Export run history
+                  </h3>
+                  <p class="text-[10px] text-slate-500 mb-2">
+                    Download this job's own run history (status, exit code,
+                    duration, tags) as CSV or Excel.
+                  </p>
+                  <div class="flex flex-wrap gap-2">
+                    <a
+                      href={`/api/jobs/${detailJob.id}/export/runs.csv`}
+                      class="px-3 py-1.5 rounded-full text-[11px] bg-slate-900 text-white hover:bg-slate-800"
+                    >
+                      Download CSV
+                    </a>
+                    <a
+                      href={`/api/jobs/${detailJob.id}/export/runs.xlsx`}
+                      class="px-3 py-1.5 rounded-full text-[11px] bg-slate-100 text-slate-900 border border-slate-200 hover:bg-slate-200"
+                    >
+                      Download Excel
+                    </a>
                   </div>
-                )}
+                </div>
 
                 {/* Runbook / notes */}
                 <div class="bg-white border border-slate-200 rounded-lg p-2.5">
@@ -1999,37 +1948,17 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                     </h3>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!publicAllowed) {
-                          const msg =
-                            "Public status links are not available on your current plan.";
-                          setJobError(msg);
-                          pushToast("info", msg);
-                          return;
-                        }
-                        handleTogglePublic(detailJob);
-                      }}
-                      disabled={
-                        togglingPublicId === detailJob.id || !publicAllowed
-                      }
+                      onClick={() => handleTogglePublic(detailJob)}
+                      disabled={togglingPublicId === detailJob.id}
                       class={
                         "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border " +
-                        (publicAllowed
-                          ? detailJob.publicEnabled
-                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                            : "bg-slate-50 border-slate-200 text-slate-500"
-                          : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed")
-                      }
-                      title={
-                        publicAllowed
-                          ? ""
-                          : "Upgrade your plan to enable public status links"
+                        (detailJob.publicEnabled
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                          : "bg-slate-50 border-slate-200 text-slate-500")
                       }
                     >
                       {togglingPublicId === detailJob.id
                         ? "Updating…"
-                        : !publicAllowed
-                        ? "Public (upgrade)"
                         : detailJob.publicEnabled
                         ? "Public on"
                         : "Public off"}
@@ -2442,8 +2371,7 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                         <p class="text-[10px] text-slate-500">
                           This run did not include captured logs. To see stdout
                           and stderr tails here, invoke your job via the
-                          RunGuard CLI wrapper instead of a plain curl, and
-                          ensure your plan allows log capture for this job.
+                          RunGuard CLI wrapper instead of a plain curl.
                         </p>
                       )}
                     </>

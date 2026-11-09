@@ -23,7 +23,7 @@ export default function SecurityPage() {
           everywhere" immediately invalidates all existing sessions rather than waiting for them to
           expire naturally.
         </p>
-        <p>Agent tokens (used by the CLI's <code>register</code> command) are a separate, narrowly-scoped credential — they can create/look up jobs but cannot access the web UI, billing, or account settings, and can be regenerated at any time, which instantly revokes the old value.</p>
+        <p>Agent tokens (used by the CLI's <code>register</code> command) are a separate, narrowly-scoped credential — they can create/look up jobs but cannot access the web UI or account settings, and can be regenerated at any time, which instantly revokes the old value.</p>
       </section>
 
       <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-2">

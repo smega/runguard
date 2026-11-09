@@ -93,11 +93,10 @@ func (a *App) handleCreateProject(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
-	plan := a.getUserPlanFeatures(u)
-	if !u.IsAdmin && plan.MaxProjects > 0 {
+	if !u.IsAdmin && a.cfg.Limits.MaxProjectsPerUser > 0 {
 		count, _ := a.projectsColl.CountDocuments(ctx, bson.M{"user_id": u.ID, "deleted_at": bson.M{"$exists": false}})
-		if int(count) >= plan.MaxProjects {
-			c.JSON(http.StatusForbidden, gin.H{"error": "project limit reached for your plan", "max_projects": plan.MaxProjects})
+		if int(count) >= a.cfg.Limits.MaxProjectsPerUser {
+			c.JSON(http.StatusForbidden, gin.H{"error": "project limit reached", "max_projects": a.cfg.Limits.MaxProjectsPerUser})
 			return
 		}
 	}

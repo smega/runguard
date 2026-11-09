@@ -19,7 +19,6 @@ import PublicJobPage from "./pages/PublicJobPage.jsx";
 import AccountPage from "./pages/AccountPage.jsx";
 import WebhooksPage from "./pages/WebHooksPage.jsx";
 import AgentPage from "./pages/AgentPage.jsx";
-import PricingPage from "./pages/PricingPage.jsx";
 import ProjectsPage from "./pages/ProjectsPage.jsx";
 import IncidentsPage from "./pages/IncidentsPage.jsx";
 import DocsPage from "./pages/DocsPage.jsx";
@@ -51,7 +50,6 @@ export default function App() {
       <main class="flex-1">
         <Router>
           <LandingPage path="/" user={user} />
-          <PricingPage path="/pricing" user={user} />
           <LoginPage path="/login" onLogin={handleAuth} user={user} />
           <SignupPage path="/signup" onSignup={handleAuth} user={user} />
           <ProfilePage path="/profile" user={user} onLogout={handleLogout} />
@@ -80,7 +78,6 @@ export default function App() {
           <span class="text-slate-300">·</span>
           <span>quietly making sure your jobs actually run</span>
           <span class="text-slate-300">·</span>
-          <Link href="/pricing" class="hover:text-slate-900">Pricing</Link>
           <Link href="/docs" class="hover:text-slate-900">Docs</Link>
           <Link href="/security" class="hover:text-slate-900">Security</Link>
           <Link href="/privacy" class="hover:text-slate-900">Privacy</Link>

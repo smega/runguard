@@ -110,13 +110,6 @@ func (a *App) handleJobWebhookLogs(c *gin.Context) {
 		return
 	}
 
-	// If you want to enforce plan feature:
-	// plan := a.planForUser(user) // whatever you already use
-	// if !user.IsAdmin && !plan.AllowWebhooks {
-	//     c.JSON(http.StatusForbidden, gin.H{"error": "webhooks not available on your plan"})
-	//     return
-	// }
-
 	limit := int64(20)
 	if s := c.Query("limit"); s != "" {
 		if v, err := strconv.Atoi(s); err == nil && v > 0 && v <= 200 {
@@ -269,21 +262,10 @@ type captureLimits struct {
 	MaxStderr int
 }
 
-// plan: "free" / "plus" / "scale"
-func captureLimitsFor(plan string, isAdmin bool) captureLimits {
-	if isAdmin {
-		return captureLimits{MaxStdout: 32 * 1024, MaxStderr: 32 * 1024}
-	}
-	switch plan {
-	case "free":
-		return captureLimits{MaxStdout: 0, MaxStderr: 1024}
-	case "plus":
-		return captureLimits{MaxStdout: 4 * 1024, MaxStderr: 4 * 1024}
-	case "scale":
-		return captureLimits{MaxStdout: 32 * 1024, MaxStderr: 32 * 1024}
-	default:
-		return captureLimits{MaxStdout: 0, MaxStderr: 0}
-	}
+// No plan tiers anymore -- everyone gets the same (generous) capture
+// limit, matching what the old top tier got.
+func defaultCaptureLimits() captureLimits {
+	return captureLimits{MaxStdout: 32 * 1024, MaxStderr: 32 * 1024}
 }
 
 func makeLogTail(raw string, limit int) *LogTail {

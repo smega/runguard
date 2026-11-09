@@ -109,24 +109,20 @@ export default function AdminPage({ user }) {
           <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
             <tr>
               <th class="text-left px-4 py-2">Email</th>
-              <th class="text-left px-4 py-2">Plan</th>
-              <th class="text-left px-4 py-2">Billing status</th>
               <th class="text-left px-4 py-2">Admin</th>
               <th class="text-right px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+              <tr><td colSpan="3" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
             )}
             {!loading && users.length === 0 && (
-              <tr><td colSpan="5" class="px-4 py-6 text-center text-slate-500">No users found.</td></tr>
+              <tr><td colSpan="3" class="px-4 py-6 text-center text-slate-500">No users found.</td></tr>
             )}
             {!loading && users.map((u) => (
               <tr key={u.id} class="border-t border-slate-100">
                 <td class="px-4 py-2 text-slate-800">{u.email}</td>
-                <td class="px-4 py-2 text-slate-600">{u.plan}</td>
-                <td class="px-4 py-2 text-slate-600">{u.billing_status || "—"}</td>
                 <td class="px-4 py-2">
                   {u.is_admin ? (
                     <span class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">admin</span>

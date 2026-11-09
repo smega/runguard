@@ -15,37 +15,29 @@ type updateAccountRequest struct {
 	WeeklySummaryEnabled *bool `json:"weekly_summary_enabled,omitempty"`
 }
 type accountResponse struct {
-	Email                   string       `json:"email"`
-	PlanID                  string       `json:"plan_id"`
-	SummaryEmailEnabled     bool         `json:"summary_email_enabled"`
-	SummaryHourUTC          int          `json:"summary_hour_utc"`
-	SummaryLastSentAt       *time.Time   `json:"summary_last_sent_at,omitempty"`
-	WeeklySummaryEnabled    bool         `json:"weekly_summary_enabled"`
-	WeeklySummaryLastSentAt *time.Time   `json:"weekly_summary_last_sent_at,omitempty"`
-	TrialEndsAt             *time.Time   `json:"trial_ends_at,omitempty"`
-	BillingStatus           string       `json:"billing_status"`
-	BillingCustomerID       string       `json:"billing_customer_id,omitempty"`
-	BillingSubscription     string       `json:"billing_subscription_id,omitempty"`
-	Plan                    PlanConfig   `json:"plan"`
-	PlanCatalog             []PlanConfig `json:"plan_catalog"`
-	IsAdmin                 bool         `json:"is_admin"`
+	Email                   string     `json:"email"`
+	SummaryEmailEnabled     bool       `json:"summary_email_enabled"`
+	SummaryHourUTC          int        `json:"summary_hour_utc"`
+	SummaryLastSentAt       *time.Time `json:"summary_last_sent_at,omitempty"`
+	WeeklySummaryEnabled    bool       `json:"weekly_summary_enabled"`
+	WeeklySummaryLastSentAt *time.Time `json:"weekly_summary_last_sent_at,omitempty"`
+	// MaxJobs/MaxProjects are 0 when unlimited (the self-hosted default) —
+	// RunGuard has no plan/tier system, just this one optional cap.
+	MaxJobs     int  `json:"max_jobs"`
+	MaxProjects int  `json:"max_projects"`
+	IsAdmin     bool `json:"is_admin"`
 }
 
 func accountResponseFromUser(a *App, u *User) accountResponse {
 	return accountResponse{
 		Email:                   u.Email,
-		PlanID:                  u.Plan,
 		SummaryEmailEnabled:     u.SummaryEmailEnabled,
 		SummaryHourUTC:          u.SummaryHourUTC,
 		SummaryLastSentAt:       u.SummaryLastSentAt,
 		WeeklySummaryEnabled:    u.WeeklySummaryEnabled,
 		WeeklySummaryLastSentAt: u.WeeklySummaryLastSentAt,
-		TrialEndsAt:             u.TrialEndsAt,
-		BillingStatus:           effectiveBillingStatus(u),
-		BillingCustomerID:       u.BillingCustomerID,
-		BillingSubscription:     u.BillingSubscriptionID,
-		Plan:                    a.getPlanByID(u.Plan),
-		PlanCatalog:             a.cfg.Plans,
+		MaxJobs:                 a.cfg.Limits.MaxJobsPerUser,
+		MaxProjects:             a.cfg.Limits.MaxProjectsPerUser,
 		IsAdmin:                 u.IsAdmin,
 	}
 }

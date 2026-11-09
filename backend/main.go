@@ -140,9 +140,6 @@ func main() {
 	// start weekly summary loop
 	go app.RunWeeklySummaryLoop()
 
-	// start trial-expiry loop
-	go app.RunTrialExpiryLoop()
-
 	r := gin.Default()
 
 	// Only trust X-Forwarded-For from configured reverse proxies (e.g. a
@@ -240,15 +237,6 @@ func main() {
 		admin.GET("/audit-log", app.handleAdminAuditLog)
 	}
 
-	api.GET("/pricing", app.handlePublicPricing)
-	api.POST("/billing/webhooks/stripe", app.handleBillingStripeWebhook)
-	billing := api.Group("/billing").Use(app.authMiddleware())
-	{
-		billing.GET("", app.handleGetBilling)
-		billing.POST("/checkout", app.handleCreateCheckoutLink)
-		billing.POST("/portal", app.handleCreatePortalLink)
-	}
-
 	projects := api.Group("/projects").Use(app.authMiddleware())
 	{
 		projects.GET("", app.handleListProjects)
@@ -295,7 +283,7 @@ func main() {
 		jobs.GET("/:id/export/runs.xlsx", app.handleExportJobRunsExcel)
 	}
 
-	// Exports (authenticated, top-tier only via plan.AllowExports)
+	// Exports (authenticated)
 	exports := api.Group("/exports").Use(app.authMiddleware())
 	{
 		exports.GET("/jobs.csv", app.handleExportJobsCSV)
@@ -313,7 +301,6 @@ func main() {
 	public := api.Group("/public")
 	{
 		public.GET("/job/:token", app.handlePublicJob)
-		public.GET("/cli/versions", app.handleCLIListVersions)
 		public.GET("/status", app.handlePublicStatus)
 	}
 

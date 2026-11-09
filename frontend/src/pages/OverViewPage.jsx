@@ -51,8 +51,7 @@ export default function OverviewPage() {
 
   const s = stats || {};
   const unhealthy = (s.lateJobs || 0) + (s.neverSeenJobs || 0);
-  const plan = account?.plan || {};
-  const maxJobs = plan?.max_jobs ?? 1;
+  const maxJobs = account?.max_jobs ?? 0; // 0 = unlimited
   const jobsUsed = s.totalJobs ?? 0;
 
   return (
@@ -69,13 +68,13 @@ export default function OverviewPage() {
       <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
-            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Plan & limits</p>
-            <p class="mt-1 text-sm font-semibold text-slate-900">{plan.label || "Free"} plan</p>
-            <p class="text-xs text-slate-500 mt-0.5">{(plan.bullets && plan.bullets[0]) || "Usage limits and features are configured server-side."}</p>
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Usage</p>
+            <p class="mt-1 text-sm font-semibold text-slate-900">{maxJobs > 0 ? `Jobs used: ${jobsUsed}/${maxJobs}` : `Jobs: ${jobsUsed} (unlimited)`}</p>
           </div>
           <div class="flex flex-col items-end gap-2 text-[11px] text-slate-600">
-            <div class="font-medium text-slate-700">Jobs used: {jobsUsed}/{maxJobs}</div>
-            <div class="w-40 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class={(jobsUsed >= maxJobs ? "bg-red-400" : "bg-emerald-400") + " h-full rounded-full"} style={{ width: `${Math.min(100, (jobsUsed / maxJobs) * 100 || 0)}%` }} /></div>
+            {maxJobs > 0 && (
+              <div class="w-40 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class={(jobsUsed >= maxJobs ? "bg-red-400" : "bg-emerald-400") + " h-full rounded-full"} style={{ width: `${Math.min(100, (jobsUsed / maxJobs) * 100 || 0)}%` }} /></div>
+            )}
             <p class="text-[11px] text-slate-500">Projects: {projects.length} · Active incidents: {incidents.length}</p>
           </div>
         </div>

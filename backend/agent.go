@@ -233,9 +233,8 @@ func (a *App) handleAgentRegister(c *gin.Context) {
 		return
 	}
 
-	// --- PLAN LIMIT ENFORCEMENT (same rule as handleCreateJob) ---
-	plan := a.getPlanByID(u.Plan)
-	if !u.IsAdmin && plan.MaxJobs > 0 {
+	// --- JOB LIMIT ENFORCEMENT (same rule as handleCreateJob) ---
+	if !u.IsAdmin && a.cfg.Limits.MaxJobsPerUser > 0 {
 		count, cerr := a.jobsColl.CountDocuments(ctx, bson.M{
 			"user_id":    u.ID,
 			"deleted_at": bson.M{"$exists": false},
@@ -245,10 +244,10 @@ func (a *App) handleAgentRegister(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "db error"})
 			return
 		}
-		if int(count) >= plan.MaxJobs {
+		if int(count) >= a.cfg.Limits.MaxJobsPerUser {
 			c.JSON(http.StatusForbidden, gin.H{
-				"error":    "job limit reached for your plan",
-				"max_jobs": plan.MaxJobs,
+				"error":    "job limit reached",
+				"max_jobs": a.cfg.Limits.MaxJobsPerUser,
 			})
 			return
 		}

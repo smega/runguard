@@ -105,7 +105,3 @@ export async function getPublicStatus() {
   return { ok: res.ok, data };
 }
 
-export const getPricing = () => request("/pricing", { method: "GET" });
-export const getBilling = () => request("/billing", { method: "GET" });
-export const createCheckoutLink = (planId) => request("/billing/checkout", { method: "POST", body: JSON.stringify({ plan_id: planId }) });
-export const createPortalLink = () => request("/billing/portal", { method: "POST", body: JSON.stringify({}) });

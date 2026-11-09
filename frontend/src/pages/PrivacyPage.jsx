@@ -26,11 +26,10 @@ export default function PrivacyPage() {
 
       <section class="space-y-2">
         <h2 class="text-lg font-semibold text-slate-900">2. What we collect</h2>
-        <p><strong>Account data:</strong> your email address, a hashed password (we never store passwords in plain text), and admin/plan status.</p>
+        <p><strong>Account data:</strong> your email address, a hashed password (we never store passwords in plain text), and admin status.</p>
         <p><strong>Job configuration:</strong> job names, schedules (interval or cron expression), severity, grace periods, project groupings, and any webhook/email alert settings you configure.</p>
-        <p><strong>Run and heartbeat data:</strong> timestamps, status (ok/fail/late), exit codes, and — only if you choose to send them — short tails of your job's stdout/stderr output (capped by your plan and by the CLI's own <code>--truncate</code> flag).</p>
+        <p><strong>Run and heartbeat data:</strong> timestamps, status (ok/fail/late), exit codes, and — only if you choose to send them — short tails of your job's stdout/stderr output (capped by the CLI's own <code>--truncate</code> flag).</p>
         <p><strong>Delivery logs:</strong> records of alerts we've sent (email, webhook, PagerDuty, Teams) and whether delivery succeeded, kept so you can audit what was sent and when.</p>
-        <p><strong>Billing data:</strong> we don't store card details ourselves — Stripe handles payment processing and stores card data on our behalf (see sub-processors below). We keep a record of your plan, subscription status, and invoice history as returned by Stripe.</p>
         <p><strong>Technical data:</strong> IP address and User-Agent are visible to us as part of ordinary HTTP requests (including CLI heartbeats), and may be used for rate limiting, abuse prevention, and debugging. We don't run analytics trackers or advertising pixels on the app or landing page.</p>
       </section>
 
@@ -50,9 +49,9 @@ export default function PrivacyPage() {
 
       <section class="space-y-2">
         <h2 class="text-lg font-semibold text-slate-900">4. Why we process it (legal basis)</h2>
-        <p>Account, job, and billing data: processed under contract — it's necessary to provide the service you've signed up for.</p>
+        <p>Account and job data: processed under contract — it's necessary to provide the service you've signed up for.</p>
         <p>Technical/rate-limiting data: processed under legitimate interest, to keep the service secure and available.</p>
-        <p>Marketing emails: we don't send any beyond service-related notices (alerts, billing, security notices) unless you explicitly opt in to something else in the future — none of that exists today.</p>
+        <p>Marketing emails: we don't send any beyond service-related notices (alerts, security notices) unless you explicitly opt in to something else in the future — none of that exists today.</p>
       </section>
 
       <section class="space-y-2">
@@ -60,7 +59,6 @@ export default function PrivacyPage() {
         <p>We use a small number of third-party services to run RunGuard. We choose providers with their own GDPR commitments and don't sell or share your data beyond what's needed to operate the service:</p>
         <ul class="list-disc pl-5 space-y-1">
           <li><strong>MongoDB Atlas</strong> — primary database, hosting job/run/account data.</li>
-          <li><strong>Stripe</strong> — payment processing and card storage for paid plans.</li>
           <li><strong>Mailgun</strong> — outbound transactional email (alerts, weekly summaries, account notices).</li>
           <li>Our infrastructure provider, for hosting the application server itself.</li>
         </ul>
@@ -70,11 +68,9 @@ export default function PrivacyPage() {
         <h2 class="text-lg font-semibold text-slate-900">6. Data retention</h2>
         <p>
           Account and job configuration data is kept for as long as your account is active. Run
-          history, heartbeat logs, and delivery logs are retained according to your plan's history
-          window; older records may be aggregated or pruned automatically. If you delete a job or
-          close your account, we remove the associated data within a reasonable operational window,
-          except where we're required to retain billing records for tax/accounting purposes (typically
-          up to 6 years under UK law).
+          history, heartbeat logs, and delivery logs are retained for a reasonable history window;
+          older records may be aggregated or pruned automatically. If you delete a job or close
+          your account, we remove the associated data within a reasonable operational window.
         </p>
       </section>
 
@@ -95,7 +91,7 @@ export default function PrivacyPage() {
       <section class="space-y-2">
         <h2 class="text-lg font-semibold text-slate-900">8. International transfers</h2>
         <p>
-          Some of our sub-processors (Stripe, MongoDB Atlas, Mailgun) may process data outside the UK.
+          Some of our sub-processors (MongoDB Atlas, Mailgun) may process data outside the UK.
           Where that happens, it's done under a recognised safeguard — such as the provider's UK/EU
           data residency options, Standard Contractual Clauses, or an adequacy decision — as offered by
           that provider.

@@ -77,13 +77,10 @@ func (a *App) writeAdminAudit(ctx context.Context, actor *User, action string, t
 }
 
 type adminUserDTO struct {
-	ID            string     `json:"id"`
-	Email         string     `json:"email"`
-	CreatedAt     time.Time  `json:"created_at"`
-	Plan          string     `json:"plan"`
-	IsAdmin       bool       `json:"is_admin"`
-	BillingStatus string     `json:"billing_status,omitempty"`
-	TrialEndsAt   *time.Time `json:"trial_ends_at,omitempty"`
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+	IsAdmin   bool      `json:"is_admin"`
 }
 
 // handleAdminListUsers returns a simple list of all users for the admin
@@ -119,13 +116,10 @@ func (a *App) handleAdminListUsers(c *gin.Context) {
 	out := make([]adminUserDTO, 0, len(users))
 	for _, u := range users {
 		out = append(out, adminUserDTO{
-			ID:            u.ID.Hex(),
-			Email:         u.Email,
-			CreatedAt:     u.CreatedAt,
-			Plan:          u.Plan,
-			IsAdmin:       u.IsAdmin,
-			BillingStatus: effectiveBillingStatus(&u),
-			TrialEndsAt:   u.TrialEndsAt,
+			ID:        u.ID.Hex(),
+			Email:     u.Email,
+			CreatedAt: u.CreatedAt,
+			IsAdmin:   u.IsAdmin,
 		})
 	}
 

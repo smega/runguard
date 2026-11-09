@@ -92,10 +92,11 @@ this replaces them). Tags:
 
 ## Billing & plan enforcement
 
-- `[DONE]` Stripe billing, trial expiry.
-- `[WORTH DOING]` Plan-based throttling — rate-limit heartbeats/exports per
-  plan tier, block ingestion once genuinely over quota. Matters once you're
-  not the only user; do this before any real marketing push, not before.
+- `[REVERSED]` Stripe billing, trial expiry, and the whole plan/tier system
+  have been removed — RunGuard isn't being monetized, the hosted instance
+  is just for visibility/reference-building. Replaced with one plain
+  config limit (`limits.max_jobs_per_user`/`max_projects_per_user`, 0 =
+  unlimited). The ideas below are obsolete as a result.
 
 ## Multi-user / teams / infra integrations (the "second wave")
 

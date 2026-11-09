@@ -125,17 +125,12 @@ func (a *App) handleSignup(c *gin.Context) {
 	}
 
 	now := time.Now()
-	trialEndsAt := now.Add(time.Duration(a.cfg.Billing.TrialDays) * 24 * time.Hour)
 	user := User{
 		Email:               req.Email,
 		PasswordHash:        string(hash),
 		CreatedAt:           now,
-		Plan:                PlanFree,
 		SummaryEmailEnabled: true,
 		SummaryHourUTC:      8,
-		BillingProvider:     a.cfg.Billing.Provider,
-		BillingStatus:       "trialing",
-		TrialEndsAt:         &trialEndsAt,
 	}
 	res, err := a.usersColl.InsertOne(ctx, user)
 	if err != nil {
@@ -268,11 +263,8 @@ func (a *App) handleMe(c *gin.Context) {
 			"id":                    u.ID.Hex(),
 			"email":                 u.Email,
 			"created_at":            u.CreatedAt,
-			"plan":                  u.Plan,
 			"summary_email_enabled": u.SummaryEmailEnabled,
 			"summary_hour_utc":      u.SummaryHourUTC,
-			"billing_status":        effectiveBillingStatus(u),
-			"trial_ends_at":         u.TrialEndsAt,
 			"is_admin":              u.IsAdmin,
 		},
 	})

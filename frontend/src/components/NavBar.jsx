@@ -57,7 +57,6 @@ export default function Navbar({ user, onLogout }) {
         <nav class="flex items-center gap-4 text-sm">
           {!user && (
             <>
-              <Link href="/pricing" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900">Pricing</Link>
               <Link href="/docs" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900">Docs</Link>
               <Link href="/agent" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900">Agent</Link>
               <Link href="/login" activeClassName="text-slate-900 font-medium" class="text-slate-600 hover:text-slate-900">Login</Link>
@@ -96,7 +95,6 @@ export default function Navbar({ user, onLogout }) {
 
                 <div class="absolute right-0 top-full w-44 rounded-xl border border-slate-200 bg-white shadow-lg py-1 text-xs z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible pointer-events-none group-hover:pointer-events-auto transition ease-out duration-100">
                   <Link href="/account" activeClassName="bg-slate-100 text-slate-900" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Account</Link>
-                  <Link href="/pricing" activeClassName="bg-slate-100 text-slate-900" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Pricing</Link>
                   <Link href="/webhooks" activeClassName="bg-slate-100 text-slate-900" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Webhooks</Link>
                   <Link href="/docs" activeClassName="bg-slate-100 text-slate-900" class="block px-3 py-1.5 text-slate-700 hover:bg-slate-50">Docs</Link>
                   {user.is_admin && (

@@ -53,25 +53,13 @@ export default function TermsPage() {
       </section>
 
       <section class="space-y-2">
-        <h2 class="text-lg font-semibold text-slate-900">4. Plans, billing, and refunds</h2>
+        <h2 class="text-lg font-semibold text-slate-900">4. Service limits</h2>
         <p>
-          Paid plans are billed monthly in advance via Stripe, in GBP, at the prices shown on our{" "}
-          <a href="/pricing" class="text-indigo-600 hover:underline">pricing page</a> at the time of
-          purchase. We may change prices for future billing periods with at least 30 days' notice by
-          email; continuing to use a paid plan after a price change takes effect constitutes
-          acceptance of the new price.
-        </p>
-        <p>
-          You can cancel a paid plan at any time from your account page; cancellation takes effect at
-          the end of the current billing period and you retain access until then. We don't offer
-          prorated refunds for partial billing periods, but if you believe you were charged in error,
-          contact us and we'll review it in good faith. Where we offer a free trial, no payment is
-          taken until the trial ends and you've chosen to continue on a paid plan.
-        </p>
-        <p>
-          If a job count or feature limit tied to your plan is exceeded (for example, you've reached
-          your plan's monitored-job limit), we may prevent new jobs from being created until you
-          upgrade or remove existing ones; we won't delete your data solely for being over a limit.
+          RunGuard is free to use. The hosted instance may apply a per-account cap on the number of
+          monitored jobs or projects, to keep the service sustainable to run — if you reach that
+          limit, we may prevent new jobs from being created until you remove existing ones; we won't
+          delete your data solely for being over a limit. If you need more than the hosted limit
+          allows, you're welcome to self-host RunGuard instead (see the open-source repository).
         </p>
       </section>
 
@@ -82,7 +70,7 @@ export default function TermsPage() {
           <li>Monitor or interact with systems you don't have the right to monitor.</li>
           <li>Configure webhook or callback URLs that target internal/private network addresses, or otherwise attempt to use RunGuard's outbound requests as a proxy into infrastructure that isn't yours.</li>
           <li>Send unlawful, infringing, or abusive content through job names, tags, stdout/stderr captures, or any other field.</li>
-          <li>Attempt to circumvent plan limits, rate limits, or authentication controls, or interfere with the service's availability for other users.</li>
+          <li>Attempt to circumvent job/project limits, rate limits, or authentication controls, or interfere with the service's availability for other users.</li>
           <li>Reverse engineer the hosted service (as distinct from the open-source CLI, which you're welcome to inspect and modify under its own license).</li>
         </ul>
         <p>We may suspend or terminate accounts that violate this section, with notice where practicable.</p>
@@ -135,8 +123,8 @@ export default function TermsPage() {
           You may close your account at any time from your account settings. We may suspend or
           terminate your account for breach of these terms, non-payment, or if required by law, and
           will make reasonable efforts to notify you first except where immediate action is
-          necessary. Sections that by their nature should survive termination (billing already owed,
-          liability limits) continue to apply.
+          necessary. Sections that by their nature should survive termination (liability limits)
+          continue to apply.
         </p>
       </section>
 

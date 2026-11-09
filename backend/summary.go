@@ -47,11 +47,6 @@ func (a *App) sendDueSummaries() error {
 			continue
 		}
 
-		plan := a.getUserPlanFeatures(&u)
-		if !plan.AllowDailySummary {
-			continue
-		}
-
 		hour := u.SummaryHourUTC
 		if hour < 0 || hour > 23 {
 			hour = 8
@@ -69,7 +64,7 @@ func (a *App) sendDueSummaries() error {
 			}
 		}
 
-		if err := a.sendUserDailySummary(ctx, &u, plan, now); err != nil {
+		if err := a.sendUserDailySummary(ctx, &u, now); err != nil {
 			log.Printf("daily summary for %s: %v", u.Email, err)
 			continue
 		}
@@ -88,7 +83,7 @@ func (a *App) sendDueSummaries() error {
 	return nil
 }
 
-func (a *App) sendUserDailySummary(ctx context.Context, u *User, plan PlanFeatures, now time.Time) error {
+func (a *App) sendUserDailySummary(ctx context.Context, u *User, now time.Time) error {
 	// 1) load user's jobs
 	jobsCur, err := a.jobsColl.Find(ctx, bson.M{
 		"user_id":    u.ID,
@@ -175,7 +170,7 @@ func (a *App) sendUserDailySummary(ctx context.Context, u *User, plan PlanFeatur
 		return nil
 	}
 
-	body := buildSummaryEmailBody(u, plan, lateNow, lateRecently, neverSeen, lateCounts, now)
+	body := buildSummaryEmailBody(u, lateNow, lateRecently, neverSeen, lateCounts, now)
 
 	subject := "RunGuard – daily job summary"
 
@@ -189,7 +184,6 @@ func (a *App) sendUserDailySummary(ctx context.Context, u *User, plan PlanFeatur
 
 func buildSummaryEmailBody(
 	u *User,
-	plan PlanFeatures,
 	lateNow []Job,
 	lateRecently []Job,
 	neverSeen []Job,
@@ -233,15 +227,6 @@ func buildSummaryEmailBody(
 			fmt.Fprintf(&sb, "  • %s\n", j.Name)
 		}
 		sb.WriteString("\n")
-	}
-
-	fmt.Fprintf(&sb, "You are on the %s plan (max %d jobs).\n", plan.Label, plan.MaxJobs)
-	if plan.ID == PlanFree {
-		sb.WriteString("Free plan includes webhook alerts and this daily summary.\n")
-	} else if plan.ID == PlanPlus {
-		sb.WriteString("Plus plan includes per-job email alerts and public status links.\n")
-	} else if plan.ID == PlanScale {
-		sb.WriteString("Scale plan will later include PDF/Excel exports and multi-project support.\n")
 	}
 
 	sb.WriteString("\nBest,\nRunGuard\n")
@@ -295,13 +280,6 @@ func (a *App) sendDueWeeklySummaries() error {
 		var u User
 		if err := cur.Decode(&u); err != nil {
 			log.Printf("weekly summary decode user: %v", err)
-			continue
-		}
-
-		plan := a.getUserPlanFeatures(&u)
-		if !plan.AllowDailySummary {
-			// Weekly digest rides on the same plan capability as the daily
-			// summary -- both are "summary emails", just different cadence.
 			continue
 		}
 

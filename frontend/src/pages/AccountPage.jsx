@@ -1,16 +1,14 @@
 import { route } from "preact-router";
 import { useEffect, useState } from "preact/hooks";
-import { createCheckoutLink, createPortalLink, getAccount, getAgentToken, getBilling, logoutAllDevices, regenerateAgentToken, updateAccount } from "../api.js";
+import { getAccount, getAgentToken, logoutAllDevices, regenerateAgentToken, updateAccount } from "../api.js";
 import { showToast } from "../components/Toast.jsx";
 
 export default function AccountPage({ user, onLogout }) {
   const [account, setAccount] = useState(null);
-  const [billing, setBilling] = useState(null);
   const [loadingAccount, setLoadingAccount] = useState(true);
   const [accountError, setAccountError] = useState("");
   const [savingSummary, setSavingSummary] = useState(false);
   const [savingWeeklySummary, setSavingWeeklySummary] = useState(false);
-  const [billingBusy, setBillingBusy] = useState("");
   const [loggingOutAll, setLoggingOutAll] = useState(false);
   const [logoutAllMessage, setLogoutAllMessage] = useState("");
 
@@ -25,9 +23,7 @@ export default function AccountPage({ user, onLogout }) {
     async function loadAccount() {
       try {
         setAccountError("");
-        const [accountData, billingData] = await Promise.all([getAccount(), getBilling()]);
-        setAccount(accountData);
-        setBilling(billingData);
+        setAccount(await getAccount());
       } catch (err) {
         console.error("load account", err);
         setAccountError(err.message || "Failed to load account");
@@ -63,30 +59,6 @@ export default function AccountPage({ user, onLogout }) {
       setAccountError(err.message || "Failed to update account");
     } finally {
       setSavingWeeklySummary(false);
-    }
-  }
-
-  async function goCheckout(planId) {
-    setBillingBusy(planId);
-    try {
-      const res = await createCheckoutLink(planId);
-      window.location.href = res.url;
-    } catch (err) {
-      setAccountError(err.message || "Failed to open checkout");
-    } finally {
-      setBillingBusy("");
-    }
-  }
-
-  async function goPortal() {
-    setBillingBusy("portal");
-    try {
-      const res = await createPortalLink();
-      window.location.href = res.url;
-    } catch (err) {
-      setAccountError(err.message || "Billing portal is not configured yet");
-    } finally {
-      setBillingBusy("");
     }
   }
 
@@ -155,16 +127,15 @@ export default function AccountPage({ user, onLogout }) {
   if (accountError && !account) return <div class="p-6"><p class="text-sm text-red-600">{accountError}</p></div>;
 
   const a = account || {};
-  const plan = a.plan || {};
   const isAdmin = !!a.is_admin;
-  const billingPlans = billing?.billing || [];
-  const currentPlanId = billing?.current_plan_id || a.plan_id;
+  const maxJobs = a.max_jobs ?? 0; // 0 = unlimited
+  const maxProjects = a.max_projects ?? 0;
 
   return (
     <div class="max-w-6xl mx-auto px-4 py-8 space-y-6">
       <div>
-        <h1 class="text-xl font-semibold text-slate-900">Account & billing</h1>
-        <p class="text-sm text-slate-500">Plan details, billing routes, exports, and summary email settings for your RunGuard workspace.</p>
+        <h1 class="text-xl font-semibold text-slate-900">Account</h1>
+        <p class="text-sm text-slate-500">Usage limits, exports, and summary email settings for your RunGuard workspace.</p>
       </div>
       {accountError && <div class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{accountError}</div>}
 
@@ -192,24 +163,12 @@ export default function AccountPage({ user, onLogout }) {
         </section>
 
         <section class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Current plan</p>
-              <p class="mt-1 text-sm font-semibold text-slate-900">{plan.label || "Free"}</p>
-              <p class="mt-1 text-xs text-slate-500">Up to {plan.max_jobs ?? 1} jobs and {plan.max_projects ?? 1} projects.</p>
-            </div>
-            <div class="text-right text-[11px] text-slate-500 max-w-[12rem]">
-              <div>Email alerts: <span class="font-medium">{plan.allow_email_alerts ? "Included" : "Not included"}</span></div>
-              <div>Public links: <span class="font-medium">{plan.allow_public_links ? "Included" : "Not included"}</span></div>
-              <div>Exports: <span class="font-medium">{plan.allow_exports ? "Included" : "Not included"}</span></div>
-            </div>
-          </div>
-          {Array.isArray(plan.bullets) && plan.bullets.length > 0 && <ul class="space-y-1 text-[11px] text-slate-600">{plan.bullets.map((b) => <li key={b} class="flex items-start gap-1.5"><span class="mt-[3px] h-1.5 w-1.5 rounded-full bg-slate-300" /><span>{b}</span></li>)}</ul>}
-          <div class="flex flex-wrap gap-2 pt-2">
-            {billingPlans.filter((bp) => bp.plan_id !== currentPlanId && bp.price_monthly_gbp > 0).map((bp) => (
-              <button key={bp.plan_id} onClick={() => goCheckout(bp.plan_id)} disabled={billingBusy === bp.plan_id} class="px-3 py-1.5 rounded-full bg-slate-900 text-white text-xs hover:bg-slate-800 disabled:opacity-50">{billingBusy === bp.plan_id ? "Opening…" : `Upgrade to ${bp.plan_id}`}</button>
-            ))}
-            <button onClick={goPortal} disabled={billingBusy === "portal"} class="px-3 py-1.5 rounded-full border border-slate-300 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-50">{billingBusy === "portal" ? "Opening…" : "Open billing portal"}</button>
+          <div>
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Usage</p>
+            <p class="mt-1 text-sm font-semibold text-slate-900">
+              {maxJobs > 0 ? `Up to ${maxJobs} jobs` : "Unlimited jobs"} · {maxProjects > 0 ? `up to ${maxProjects} projects` : "unlimited projects"}
+            </p>
+            <p class="mt-1 text-xs text-slate-500">RunGuard is free — this is just a per-instance cap, not a paid tier.</p>
           </div>
         </section>
       </div>
@@ -284,17 +243,15 @@ export default function AccountPage({ user, onLogout }) {
         </p>
       </div>
 
-      {(plan.allow_exports || isAdmin) && (
-        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
-          <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Exports</p>
-          <p class="text-sm text-slate-700">Download a snapshot of your jobs and their current status as CSV, Excel or PDF.</p>
-          <div class="flex flex-wrap gap-2">
-            <button type="button" onClick={() => handleExport("csv")} class="px-3 py-1.5 rounded-full text-[11px] bg-slate-900 text-white hover:bg-slate-800">Download CSV</button>
-            <button type="button" onClick={() => handleExport("xlsx")} class="px-3 py-1.5 rounded-full text-[11px] bg-slate-100 text-slate-900 border border-slate-200 hover:bg-slate-200">Download Excel</button>
-            <button type="button" onClick={() => handleExport("pdf")} class="px-3 py-1.5 rounded-full text-[11px] bg-slate-100 text-slate-900 border border-slate-200 hover:bg-slate-200">Download PDF</button>
-          </div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Exports</p>
+        <p class="text-sm text-slate-700">Download a snapshot of your jobs and their current status as CSV, Excel or PDF.</p>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" onClick={() => handleExport("csv")} class="px-3 py-1.5 rounded-full text-[11px] bg-slate-900 text-white hover:bg-slate-800">Download CSV</button>
+          <button type="button" onClick={() => handleExport("xlsx")} class="px-3 py-1.5 rounded-full text-[11px] bg-slate-100 text-slate-900 border border-slate-200 hover:bg-slate-200">Download Excel</button>
+          <button type="button" onClick={() => handleExport("pdf")} class="px-3 py-1.5 rounded-full text-[11px] bg-slate-100 text-slate-900 border border-slate-200 hover:bg-slate-200">Download PDF</button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

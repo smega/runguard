@@ -102,16 +102,6 @@ func (a *App) buildJobExportRows(ctx context.Context, u *User, now time.Time) ([
 // GET /api/exports/jobs.csv
 func (a *App) handleExportJobsCSV(c *gin.Context) {
 	u := c.MustGet("user").(*User)
-	plan := a.getUserPlanFeatures(u)
-
-	// for safety you *could* re-check admin explicitly, but the helper already did it
-	if !plan.AllowExports {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "exports are only available on the top tier",
-		})
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
 
@@ -171,16 +161,6 @@ func (a *App) handleExportJobsCSV(c *gin.Context) {
 // GET /api/exports/jobs.xlsx
 func (a *App) handleExportJobsExcel(c *gin.Context) {
 	u := c.MustGet("user").(*User)
-	plan := a.getUserPlanFeatures(u)
-
-	// for safety you *could* re-check admin explicitly, but the helper already did it
-	if !plan.AllowExports {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "exports are only available on the top tier",
-		})
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
 
@@ -255,16 +235,6 @@ func (a *App) handleExportJobsExcel(c *gin.Context) {
 // GET /api/exports/jobs.pdf
 func (a *App) handleExportJobsPDF(c *gin.Context) {
 	u := c.MustGet("user").(*User)
-	plan := a.getUserPlanFeatures(u)
-
-	// for safety you *could* re-check admin explicitly, but the helper already did it
-	if !plan.AllowExports {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "exports are only available on the top tier",
-		})
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
 
@@ -390,12 +360,6 @@ func (a *App) buildJobRunExportRows(ctx context.Context, jobID primitive.ObjectI
 // GET /api/jobs/:id/export/runs.csv
 func (a *App) handleExportJobRunsCSV(c *gin.Context) {
 	u := c.MustGet("user").(*User)
-	plan := a.getUserPlanFeatures(u)
-	if !plan.AllowExports {
-		c.JSON(http.StatusForbidden, gin.H{"error": "exports are only available on the top tier"})
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
 
@@ -435,12 +399,6 @@ func (a *App) handleExportJobRunsCSV(c *gin.Context) {
 // GET /api/jobs/:id/export/runs.xlsx
 func (a *App) handleExportJobRunsExcel(c *gin.Context) {
 	u := c.MustGet("user").(*User)
-	plan := a.getUserPlanFeatures(u)
-	if !plan.AllowExports {
-		c.JSON(http.StatusForbidden, gin.H{"error": "exports are only available on the top tier"})
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
 

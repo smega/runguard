@@ -33,12 +33,6 @@ export default function LandingPage({ user }) {
                   >
                     Get started
                   </Link>
-                  <Link
-                    href="/pricing"
-                    class="text-sm text-slate-600 hover:text-slate-900"
-                  >
-                    Pricing
-                  </Link>
                 </>
               )}
               {user && (
@@ -156,9 +150,6 @@ $ runguard self-update`}
                 Get started
               </Link>
             )}
-            <Link href="/pricing" class="text-sm text-slate-300 hover:text-white">
-              See pricing
-            </Link>
           </div>
         </section>
       </div>

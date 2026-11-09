@@ -46,98 +46,10 @@ alerts:
   min_late_seconds: 0
   cooldown_seconds: 1800
 
-cli:
-  download_base: "https://your-cli-download-domain.example"
-  stable: "0.1.3"
-  rc: ""
-  nightly: ""
-  default_channel: "latest"
-
-plans:
-  - id: free
-    label: Free
-    max_jobs: 1
-    max_projects: 1
-    allow_webhooks: true
-    allow_email_alerts: false
-    allow_public_links: false
-    allow_daily_summary: true
-    allow_exports: false
-    allow_multiple_projects: false
-    allow_pdf_export: false
-    bullets:
-      - Up to 1 monitored job
-      - Webhook alerts
-      - Daily summary email
-      - 1 project
-      - No public status links
-      - No per-job email alerts
-
-  - id: plus
-    label: Plus
-    max_jobs: 5
-    max_projects: 3
-    allow_webhooks: true
-    allow_email_alerts: true
-    allow_public_links: true
-    allow_daily_summary: true
-    allow_exports: false
-    allow_multiple_projects: true
-    allow_pdf_export: false
-    bullets:
-      - Up to 5 monitored jobs
-      - Webhook alerts
-      - Daily summary email
-      - Per-job email alerts
-      - Up to 3 projects
-      - Public status links
-
-  - id: scale
-    label: Scale
-    max_jobs: 20
-    max_projects: 10
-    allow_webhooks: true
-    allow_email_alerts: true
-    allow_public_links: true
-    allow_daily_summary: true
-    allow_exports: true
-    allow_multiple_projects: true
-    allow_pdf_export: true
-    bullets:
-      - Up to 20 monitored jobs
-      - Webhook alerts
-      - Daily summary email
-      - Per-job email alerts
-      - Public status links
-      - Up to 10 projects
-      - PDF/Excel exports
-      - Multi-project workflows
-
-
-billing:
-  provider: "stripe"
-  trial_days: 14
-  stripe_secret_key: "REPLACE_WITH_STRIPE_SECRET_KEY"
-  webhook_secret: "REPLACE_WITH_STRIPE_WEBHOOK_SECRET"
-  success_url: "https://your-domain.example/account?checkout=success"
-  cancel_url: "https://your-domain.example/pricing?checkout=cancelled"
-  portal_return_url: "https://your-domain.example/account"
-  plans:
-    - plan_id: free
-      price_monthly_gbp: 0
-      stripe_price_id: ""
-      checkout_url: ""
-      portal_url: ""
-      highlight: false
-    - plan_id: plus
-      price_monthly_gbp: 19
-      stripe_price_id: "REPLACE_WITH_STRIPE_PRICE_ID"
-      checkout_url: ""
-      portal_url: ""
-      highlight: true
-    - plan_id: scale
-      price_monthly_gbp: 59
-      stripe_price_id: "REPLACE_WITH_STRIPE_PRICE_ID"
-      checkout_url: ""
-      portal_url: ""
-      highlight: false
+# RunGuard isn't monetized -- there's no plan/tier system, just an optional
+# per-user cap. 0 (or omit the key) means unlimited, which is what you want
+# for a self-hosted instance. The author's own hosted instance sets these
+# low (e.g. 3) purely to keep it small, not as a paid-tier upsell.
+limits:
+  max_jobs_per_user: 0
+  max_projects_per_user: 0

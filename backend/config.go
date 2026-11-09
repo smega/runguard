@@ -5,35 +5,6 @@ import (
 	"os"
 )
 
-type BillingPlanConfig struct {
-	PlanID          string `yaml:"plan_id" json:"plan_id"`
-	PriceMonthlyGBP int    `yaml:"price_monthly_gbp" json:"price_monthly_gbp"`
-	StripePriceID   string `yaml:"stripe_price_id" json:"stripe_price_id"`
-	CheckoutURL     string `yaml:"checkout_url" json:"checkout_url"`
-	PortalURL       string `yaml:"portal_url" json:"portal_url"`
-	Highlight       bool   `yaml:"highlight" json:"highlight"`
-}
-
-// PlanConfig is the single source of truth for plan limits/features. It's
-// used both to enforce limits (job/project creation, feature gating) and to
-// describe plans to the frontend (pricing page, account page) — previously
-// enforcement instead read from a separate hardcoded matrix in plans.go
-// that could silently drift from what config.yml (and therefore the
-// pricing page) said, since nothing kept the two in sync.
-type PlanConfig struct {
-	ID                   string   `yaml:"id" json:"id"`
-	Label                string   `yaml:"label" json:"label"`
-	MaxJobs              int      `yaml:"max_jobs" json:"max_jobs"`
-	MaxProjects          int      `yaml:"max_projects" json:"max_projects"`
-	AllowWebhooks        bool     `yaml:"allow_webhooks" json:"allow_webhooks"`
-	AllowEmailAlerts     bool     `yaml:"allow_email_alerts" json:"allow_email_alerts"`
-	AllowPublicLinks     bool     `yaml:"allow_public_links" json:"allow_public_links"`
-	AllowDailySummary    bool     `yaml:"allow_daily_summary" json:"allow_daily_summary"`
-	AllowExports         bool     `yaml:"allow_exports" json:"allow_exports"`
-	AllowMultipleProject bool     `yaml:"allow_multiple_projects" json:"allow_multiple_projects"`
-	AllowPDFExport       bool     `yaml:"allow_pdf_export" json:"allow_pdf_export"`
-	Bullets              []string `yaml:"bullets" json:"bullets"`
-}
 type Config struct {
 	Server struct {
 		Addr           string `yaml:"addr"`
@@ -82,24 +53,15 @@ type Config struct {
 		MinLateSeconds       int  `yaml:"min_late_seconds"`
 		CooldownSeconds      int  `yaml:"cooldown_seconds"`
 	} `yaml:"alerts"`
-	CLI struct {
-		DownloadBase   string `yaml:"download_base" json:"download_base"`
-		Stable         string `yaml:"stable" json:"stable"`
-		RC             string `yaml:"rc" json:"rc"`
-		Nightly        string `yaml:"nightly" json:"nightly"`
-		DefaultChannel string `yaml:"default_channel" json:"default_channel"`
-	} `yaml:"cli" json:"cli"`
-	Billing struct {
-		Provider        string              `yaml:"provider" json:"provider"`
-		TrialDays       int                 `yaml:"trial_days" json:"trial_days"`
-		StripeSecretKey string              `yaml:"stripe_secret_key" json:"-"`
-		WebhookSecret   string              `yaml:"webhook_secret" json:"-"`
-		SuccessURL      string              `yaml:"success_url" json:"success_url"`
-		CancelURL       string              `yaml:"cancel_url" json:"cancel_url"`
-		PortalReturnURL string              `yaml:"portal_return_url" json:"portal_return_url"`
-		Plans           []BillingPlanConfig `yaml:"plans" json:"plans"`
-	} `yaml:"billing" json:"billing"`
-	Plans []PlanConfig `yaml:"plans" json:"plans"`
+	// Limits caps how many jobs/projects a non-admin user can create. 0 (or
+	// omitted) means unlimited — RunGuard isn't monetized, so there's no
+	// plan/tier system; this exists purely so the author's own hosted
+	// instance can stay small (e.g. 3 jobs/user) while self-hosters run it
+	// unlimited by just not setting it.
+	Limits struct {
+		MaxJobsPerUser     int `yaml:"max_jobs_per_user" json:"max_jobs_per_user"`
+		MaxProjectsPerUser int `yaml:"max_projects_per_user" json:"max_projects_per_user"`
+	} `yaml:"limits" json:"limits"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -111,15 +73,6 @@ func LoadConfig(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
 		return nil, err
-	}
-	if cfg.Billing.Provider == "" {
-		cfg.Billing.Provider = "stripe"
-	}
-	if cfg.Billing.TrialDays <= 0 {
-		cfg.Billing.TrialDays = 14
-	}
-	if cfg.CLI.DefaultChannel == "" {
-		cfg.CLI.DefaultChannel = "latest"
 	}
 	return &cfg, nil
 }
