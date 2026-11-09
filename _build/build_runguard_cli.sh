@@ -11,10 +11,24 @@ VERSIONFILE="_build/version.txt"
 NEWVERSIONFILE="_build/version_new.txt"
 
 # Config is overridable via env vars so this script works unchanged from a
-# developer's machine or from CI (see .github/workflows/deploy.yml).
+# developer's machine or from CI (see .github/workflows/deploy.yml). See
+# deploy.env.example for a one-time way to set these instead of exporting
+# them in every shell.
+SCRIPT_DIR_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -f "${SCRIPT_DIR_SELF}/deploy.env" ] && source "${SCRIPT_DIR_SELF}/deploy.env"
+
 REMOTE_USER="${REMOTE_USER:-root}"
-REMOTE_HOST="${REMOTE_HOST:-manage}"
-SSH_KEY="${SSH_KEY:-$HOME/Downloads/ssh_keys/enyim}"
+REMOTE_HOST="${REMOTE_HOST:?set REMOTE_HOST (env var or _build/deploy.env)}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
+
+# Optional: bake your real instance's URLs into the binaries you actually
+# publish, instead of the placeholder defaults committed in main.go /
+# build_runguard_selfupdate.go. Leave unset to ship binaries that require
+# --api / --download-base at runtime.
+LDFLAGS="-s -w"
+[ -n "${RUNGUARD_API_BASE:-}" ] && LDFLAGS="${LDFLAGS} -X main.defaultAPIBase=${RUNGUARD_API_BASE}"
+[ -n "${RUNGUARD_VERSIONS_API:-}" ] && LDFLAGS="${LDFLAGS} -X main.defaultVersionsAPI=${RUNGUARD_VERSIONS_API}"
+[ -n "${RUNGUARD_DOWNLOAD_BASE:-}" ] && LDFLAGS="${LDFLAGS} -X main.defaultDownloadBase=${RUNGUARD_DOWNLOAD_BASE}"
 
 
 if [[ ! -f "${VERSIONFILE}" ]]; then
@@ -75,7 +89,7 @@ for t in "${targets[@]}"; do
 
   # Build from backend module root (where go.mod is)
   GOOS="${GOOS}" GOARCH="${GOARCH}" CGO_ENABLED=0 \
-    go -C "${BACKEND_DIR}" build -v -ldflags="-s -w" \
+    go -C "${BACKEND_DIR}" build -v -ldflags="${LDFLAGS}" \
       -o "${OUT_PATH}" ./cmd/runguard
 
   chmod +x "${OUT_PATH}"

@@ -5,12 +5,17 @@ set -euo pipefail
 
 
 # Config is overridable via env vars so this script works unchanged from a
-# developer's machine or from CI (see .github/workflows/deploy.yml).
+# developer's machine or from CI (see .github/workflows/deploy.yml). See
+# deploy.env.example for a one-time way to set these instead of exporting
+# them in every shell.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -f "${SCRIPT_DIR}/deploy.env" ] && source "${SCRIPT_DIR}/deploy.env"
+
 BUILD_DIR="./tmp_frontend"
 REMOTE_USER="${REMOTE_USER:-root}"
-REMOTE_HOST="${REMOTE_HOST:-manage}"
+REMOTE_HOST="${REMOTE_HOST:?set REMOTE_HOST (env var or _build/deploy.env)}"
 REMOTE_DIR="${REMOTE_DIR:-/srv/runguard/frontend}"
-SSH_KEY="${SSH_KEY:-$HOME/Downloads/ssh_keys/enyim}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
 
 cleanup() {
   # runs on *any* script exit (success or failure)
