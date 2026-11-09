@@ -15,11 +15,9 @@ export const PUBLIC_BASE_URL =
 export const PUBLIC_STATUS_BASE_URL =
   import.meta.env.VITE_PUBLIC_STATUS_BASE_URL || "https://runguard-status.example.com";
 
-export const CLI_DOWNLOAD_BASE =
-  import.meta.env.VITE_CLI_DOWNLOAD_BASE || "https://runguard-downloads.example.com";
-
-export const INSTALL_SCRIPT_URL =
-  import.meta.env.VITE_INSTALL_SCRIPT_URL || `${PUBLIC_BASE_URL}/install.sh`;
+// GitHub owner/repo the CLI is distributed from (binaries + checksums via
+// GitHub Releases) — no self-hosted download server needed.
+export const CLI_REPO = import.meta.env.VITE_CLI_REPO || "your-org/your-cli-repo";
 
 export const PRIVACY_EMAIL = import.meta.env.VITE_PRIVACY_EMAIL || "privacy@example.com";
 export const LEGAL_EMAIL = import.meta.env.VITE_LEGAL_EMAIL || "legal@example.com";

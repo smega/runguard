@@ -30,7 +30,7 @@ The request body contains:
 - `env` — only if you passed `--env=`. An arbitrary label you chose (e.g. `"prod"`); not auto-detected.
 - `tags` — only if you passed `--tag=`, plus an automatic `retried:N` tag if `--retry` caused extra attempts.
 - `agent_version` — the CLI's own version string (e.g. `"0.1.4"`), so RunGuard can flag jobs on old/unsupported agent versions.
-- `stdout_tail` / `stderr_tail` — the **last `--truncate` bytes** (default 4000) of the command's stdout and stderr, captured separately. This is genuinely the tail end of whatever your command printed — nothing is added, redacted, or filtered by the CLI itself. If your command prints secrets, those secrets end up in this field. The server additionally caps how much of this it stores per plan tier (`captureLimitsFor` in the backend); the CLI-side `--truncate` is a client-side cap on top of that.
+- `stdout_tail` / `stderr_tail` — the **last `--truncate` bytes** (default 4000) of the command's stdout and stderr, captured separately. This is genuinely the tail end of whatever your command printed — nothing is added, redacted, or filtered by the CLI itself. If your command prints secrets, those secrets end up in this field. The server additionally caps how much of this it stores (`defaultCaptureLimits` in the backend); the CLI-side `--truncate` is a client-side cap on top of that.
 - `ts` — a UTC timestamp taken right after the command finishes.
 
 What it does **not** send: no hostname, no environment variables (other than the one string you explicitly pass via `--env`), no file paths, no command line/arguments, no network configuration, no OS/user info. The server does see your request's source IP as part of ordinary HTTP, the same as any web request — that's not something the CLI adds, it's just how HTTP works.
@@ -54,4 +54,4 @@ The agent token (visible/regenerable from the account page) is a bearer credenti
 
 ## `runguard self-update`
 
-Fetches version metadata and a binary from the configured download host over plain HTTPS GET requests — no data about your machine is sent as part of this beyond what's inherent in making an HTTP request (IP, User-Agent). The downloaded binary's SHA256 checksum is verified before it replaces the currently running binary; if no checksum is available or it doesn't match, the update is refused rather than installed anyway.
+Fetches release metadata and a binary from GitHub's public Releases API (`api.github.com`) over plain HTTPS GET requests — no data about your machine is sent as part of this beyond what's inherent in making an HTTP request (IP, User-Agent). The downloaded binary's SHA256 checksum is verified before it replaces the currently running binary; if no checksum is available or it doesn't match, the update is refused rather than installed anyway.

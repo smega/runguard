@@ -53,9 +53,11 @@ spec:
                 secretKeyRef:
                   name: runguard-operator-token
                   key: agent-token
-            # Required for auto-wrapping (see README "Limitations"):
+            # Required for auto-wrapping (see README "Limitations") -- a
+            # GitHub Release asset URL works directly, no self-hosted
+            # install script needed:
             # - name: RUNGUARD_INSTALL_URL
-            #   value: "https://your-runguard-instance.example/install.sh"
+            #   value: "https://github.com/your-org/your-cli-repo/releases/download/latest/runguard-linux-amd64"
           resources:
             requests:
               cpu: 10m

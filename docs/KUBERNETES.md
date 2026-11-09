@@ -7,7 +7,10 @@ command with `runguard wrap` and heartbeats work exactly as they would
 anywhere else.
 
 `https://runguard.example.com` below is a placeholder — substitute wherever
-you host your own RunGuard backend.
+you host your own RunGuard backend. The CLI binary itself comes from GitHub
+Releases (`https://github.com/your-org/your-cli-repo/releases/download/latest/runguard-linux-amd64`
+— swap `your-org/your-cli-repo`, `linux`, and `amd64` as needed), not from
+the backend you're running.
 
 ## Minimal example
 
@@ -29,7 +32,7 @@ spec:
                 - /bin/sh
                 - -c
                 - |
-                  curl -fsSL https://runguard.example.com/install.sh | sh
+                  curl -fsSL https://github.com/your-org/your-cli-repo/releases/download/latest/runguard-linux-amd64 -o /usr/local/bin/runguard && chmod +x /usr/local/bin/runguard
                   runguard wrap --key=YOUR_HEARTBEAT_KEY -- /app/orders_sync.sh
           restartPolicy: OnFailure
 ```
@@ -66,7 +69,7 @@ command:
   - /bin/sh
   - -c
   - |
-    curl -fsSL https://runguard.example.com/install.sh | sh
+    curl -fsSL https://github.com/your-org/your-cli-repo/releases/download/latest/runguard-linux-amd64 -o /usr/local/bin/runguard && chmod +x /usr/local/bin/runguard
     KEY=$(runguard register --token=$RUNGUARD_AGENT_TOKEN --name="nightly-orders-sync" --interval=1440 | grep 'Heartbeat key' | awk '{print $3}')
     runguard wrap --key="$KEY" -- /app/orders_sync.sh
 ```

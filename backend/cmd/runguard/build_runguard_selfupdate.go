@@ -9,48 +9,35 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 )
 
-// defaultVersionsAPI and defaultDownloadBase are placeholders — override at
-// build time with -ldflags "-X main.defaultVersionsAPI=... -X
-// main.defaultDownloadBase=..." (same mechanism as Version in main.go), or
-// per-invocation with --api / --download-base. See the comment on
-// defaultAPIBase in main.go for why there's no real default here.
-var (
-	defaultVersionsAPI  = "https://runguard.example.com/api/public/cli/versions"
-	defaultDownloadBase = "https://runguard-downloads.example.com"
-)
+// defaultReleasesRepo is a placeholder — override at build time with
+// -ldflags "-X main.defaultReleasesRepo=owner/repo" (same mechanism as
+// defaultAPIBase in main.go), or per-invocation with --repo /
+// RUNGUARD_CLI_REPO. Self-update pulls releases straight from GitHub's
+// public Releases API — no custom versions API or binary host needed.
+var defaultReleasesRepo = "your-org/your-cli-repo"
 
-const defaultChannel = "stable"
+type githubRelease struct {
+	TagName string               `json:"tag_name"`
+	Assets  []githubReleaseAsset `json:"assets"`
+}
 
-type versionsAPIResponse struct {
-	DownloadBase string   `json:"download_base"`
-	Latest       string   `json:"latest"`
-	Stable       string   `json:"stable"`
-	RC           string   `json:"rc"`
-	Nightly      string   `json:"nightly"`
-	Versions     []string `json:"versions"`
-
-	Arch         string `json:"arch"`
-	Channel      string `json:"channel"`
-	Version      string `json:"version"`
-	BinaryURL    string `json:"binary"`
-	BinarySHA256 string `json:"binary_sha256"`
+type githubReleaseAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
 func SelfUpdate(args []string) error {
 	fs := flag.NewFlagSet("self-update", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // suppress default usage on parse errors
 
-	versionFlag := fs.String("version", "", "Install this specific version instead of channel")
-	channelFlag := fs.String("channel", defaultChannel, "Channel to use (latest|stable|rc|nightly)")
-	baseURLFlag := fs.String("download-base", "", "Override download base URL")
-	apiURLFlag := fs.String("api-url", defaultVersionsAPI, "Versions API URL (for testing)")
+	versionFlag := fs.String("version", "", "Install this specific release tag (e.g. v0.1.3) instead of the latest")
+	repoFlag := fs.String("repo", envOr("RUNGUARD_CLI_REPO", defaultReleasesRepo), "GitHub owner/repo to fetch releases from (or RUNGUARD_CLI_REPO env var)")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -58,53 +45,22 @@ func SelfUpdate(args []string) error {
 
 	goos := runtime.GOOS
 	goarch := runtime.GOARCH
-	archParam := fmt.Sprintf("%s-%s", goos, goarch)
 
-	targetVersion := strings.TrimSpace(*versionFlag)
-	var downloadBase string
-	var binaryURL string
-	var sha256URL string
-
-	if targetVersion == "" {
-		// Use channel + arch to pick version + binary
-		resp, err := fetchVersions(*apiURLFlag, archParam, *channelFlag)
-		if err != nil {
-			return err
-		}
-
-		if resp.Version == "" {
-			return fmt.Errorf("versions API did not return a version for arch=%s channel=%s", archParam, *channelFlag)
-		}
-
-		targetVersion = resp.Version
-
-		if *baseURLFlag != "" {
-			downloadBase = strings.TrimRight(*baseURLFlag, "/")
-		} else if resp.DownloadBase != "" {
-			downloadBase = strings.TrimRight(resp.DownloadBase, "/")
-		} else {
-			downloadBase = strings.TrimRight(defaultDownloadBase, "/")
-		}
-
-		if resp.BinaryURL != "" && *baseURLFlag == "" {
-			binaryURL = resp.BinaryURL
-			sha256URL = resp.BinarySHA256
-		} else {
-			binaryURL, sha256URL = composeBinaryURL(downloadBase, goos, goarch, targetVersion)
-		}
-	} else {
-		// explicit version; only use base URL info
-		if *baseURLFlag != "" {
-			downloadBase = strings.TrimRight(*baseURLFlag, "/")
-		} else {
-			downloadBase = strings.TrimRight(defaultDownloadBase, "/")
-		}
-		binaryURL, sha256URL = composeBinaryURL(downloadBase, goos, goarch, targetVersion)
+	release, err := fetchRelease(*repoFlag, strings.TrimSpace(*versionFlag))
+	if err != nil {
+		return err
 	}
+	targetVersion := release.TagName
 
-	if Version != "" && Version == targetVersion {
+	if Version != "" && (Version == targetVersion || "v"+Version == targetVersion) {
 		fmt.Printf("runguard is already at version %s\n", targetVersion)
 		return nil
+	}
+
+	assetName := fmt.Sprintf("runguard-%s-%s", goos, goarch)
+	binaryURL, sha256URL, err := findAsset(release, assetName)
+	if err != nil {
+		return err
 	}
 
 	fmt.Printf("==> Self-updating runguard\n")
@@ -139,12 +95,8 @@ func SelfUpdate(args []string) error {
 		return fmt.Errorf("chmod failed: %w", err)
 	}
 
-	// SHA256 verification. Unlike the old MD5 check, this is fatal on
-	// mismatch — a checksum you don't actually enforce isn't protecting
-	// against anything, it's just a log line.
-	if sha256URL == "" {
-		return fmt.Errorf("refusing to install: no checksum URL available for this release")
-	}
+	// SHA256 verification is fatal on mismatch — a checksum you don't
+	// actually enforce isn't protecting against anything.
 	if err := verifySHA256(sha256URL, tmpPath); err != nil {
 		return fmt.Errorf("checksum verification failed, aborting update: %w", err)
 	}
@@ -162,43 +114,63 @@ func SelfUpdate(args []string) error {
 	return nil
 }
 
-func fetchVersions(apiURL, arch, channel string) (*versionsAPIResponse, error) {
-	u, err := url.Parse(apiURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid api-url: %w", err)
+// fetchRelease hits GitHub's public Releases API directly — no auth, no
+// custom backend involved. version == "" fetches the latest release;
+// otherwise fetches that exact tag.
+func fetchRelease(repo, version string) (*githubRelease, error) {
+	repo = strings.Trim(repo, "/")
+	if repo == "" {
+		return nil, fmt.Errorf("--repo or RUNGUARD_CLI_REPO is required (e.g. smega/runguard-cli)")
 	}
-	q := u.Query()
-	if arch != "" {
-		q.Set("arch", arch)
-	}
-	if channel != "" {
-		q.Set("channel", channel)
-	}
-	u.RawQuery = q.Encode()
 
-	resp, err := http.Get(u.String()) // #nosec G107 (URL comes from config)
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
+	if version != "" {
+		url = fmt.Sprintf("https://api.github.com/repos/%s/releases/tags/%s", repo, version)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("GET versions: %w", err)
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GET %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		return nil, fmt.Errorf("versions API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("GitHub API returned %d for %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
 	}
 
-	var v versionsAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
-		return nil, fmt.Errorf("decode versions response: %w", err)
+	var rel githubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+		return nil, fmt.Errorf("decode GitHub release response: %w", err)
 	}
-	return &v, nil
+	return &rel, nil
 }
 
-func composeBinaryURL(downloadBase, goos, goarch, version string) (string, string) {
-	base := strings.TrimRight(downloadBase, "/")
-	bin := fmt.Sprintf("runguard-%s-%s-%s", goos, goarch, version)
-	url := base + "/" + version + "/" + bin
-	return url, url + ".sha256"
+// findAsset locates the binary and its .sha256 sibling among a release's
+// assets, by the exact name release.yml publishes them under
+// (runguard-{goos}-{goarch}, no version suffix — the tag carries that).
+func findAsset(release *githubRelease, name string) (binaryURL, sha256URL string, err error) {
+	for _, a := range release.Assets {
+		switch a.Name {
+		case name:
+			binaryURL = a.BrowserDownloadURL
+		case name + ".sha256":
+			sha256URL = a.BrowserDownloadURL
+		}
+	}
+	if binaryURL == "" {
+		return "", "", fmt.Errorf("release %s has no asset named %q", release.TagName, name)
+	}
+	if sha256URL == "" {
+		return "", "", fmt.Errorf("refusing to install: no %s.sha256 asset found for release %s", name, release.TagName)
+	}
+	return binaryURL, sha256URL, nil
 }
 
 func httpDownload(url string, w io.Writer) error {
