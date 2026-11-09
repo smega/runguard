@@ -32,7 +32,7 @@ func main() {
 	}
 
 	if cfg.PublicBaseURL == "" {
-		cfg.PublicBaseURL = "https://runguard.smega.eu"
+		log.Fatal("config: public_base_url is required (see config.sample.yml) — it's used to build heartbeat/account URLs returned to users")
 	}
 
 	db, err := InitMongo(cfg)

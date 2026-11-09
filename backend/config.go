@@ -118,9 +118,6 @@ func LoadConfig(path string) (*Config, error) {
 	if cfg.Billing.TrialDays <= 0 {
 		cfg.Billing.TrialDays = 14
 	}
-	if cfg.CLI.DownloadBase == "" {
-		cfg.CLI.DownloadBase = "https://runguard-download.smega.eu"
-	}
 	if cfg.CLI.DefaultChannel == "" {
 		cfg.CLI.DefaultChannel = "latest"
 	}
