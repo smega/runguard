@@ -1,0 +1,41 @@
+# Systemd unit for the RunGuard backend. This is the service `_build/build_go.sh`
+# expects to already exist on the remote host (it just does `systemctl stop/start`
+# on it) -- set this up once, manually, before using that script, or before
+# running the binary any other way.
+#
+# Install:
+#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin runguard
+#   sudo mkdir -p /srv/runguard/backend
+#   sudo chown runguard:runguard /srv/runguard/backend
+#   # copy the built `runguard` binary and your filled-in config.yml into
+#   # /srv/runguard/backend (matches REMOTE_DIR in deploy.env.example)
+#   sudo cp deploy/systemd/runguard.service /etc/systemd/system/runguard.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now runguard.service
+#
+# Adjust User/WorkingDirectory/ExecStart below if you deploy somewhere else.
+
+[Unit]
+Description=RunGuard backend
+After=network.target
+
+[Service]
+Type=simple
+User=runguard
+Group=runguard
+WorkingDirectory=/srv/runguard/backend
+ExecStart=/srv/runguard/backend/runguard
+Restart=on-failure
+RestartSec=5
+
+# Sandboxing -- safe defaults for a service that only needs to read its own
+# config.yml and talk to Mongo/Mailgun over the network. Remove any of
+# these if they get in the way of your own setup.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/runguard/backend
+
+[Install]
+WantedBy=multi-user.target

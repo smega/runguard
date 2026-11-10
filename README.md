@@ -30,11 +30,17 @@ npm run build
 
 This produces a static `dist/` you serve with any web server/reverse proxy
 (nginx, Caddy, etc). The backend is API-only — point your proxy's `/api` and
-`/hb` paths at the backend process and everything else at `dist/`. There's no
-bundled reverse-proxy config in this repo. `_build/build_go.sh` and
-`build_preact.sh` are the author's own SSH-based deploy scripts (they assume
-a pre-existing `systemctl` service and your own SSH key) — adapt them,
-replace them with your own process manager, or just run the binary directly.
+`/hb` paths at the backend process and everything else at `dist/`.
+[`deploy/nginx/runguard.conf.example`](deploy/nginx/runguard.conf.example) is
+a sample nginx vhost doing exactly that (TLS, static frontend, proxied
+`/api`+`/hb`, optional Basic Auth in front of the web UI only).
+
+**Running it**: [`deploy/systemd/runguard.service`](deploy/systemd/runguard.service)
+is a sample systemd unit for the backend (see the comment at its top for the
+install steps). `_build/build_go.sh` and `build_preact.sh` are the author's
+own SSH-based deploy scripts on top of that (they assume the systemd service
+and nginx vhost already exist, and your own SSH key) — adapt them, replace
+them with your own process manager, or just run the binary directly.
 
 **First admin account**: sign up normally through the web UI, then see
 "Admin access" below.
