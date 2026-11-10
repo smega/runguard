@@ -15,6 +15,7 @@ export default function WebhooksPage({ user }) {
   const [name, setName] = useState("");
   const [url, setURL] = useState("");
   const [type, setType] = useState("generic");
+  const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [deletingId, setDeletingId] = useState(null);
@@ -49,15 +50,22 @@ export default function WebhooksPage({ user }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim() || !url.trim()) return;
+    if (type === "custom" && !body.trim()) return;
     setSaving(true);
     setError("");
     setInlineMessage("");
     try {
-      const res = await createWebhookTemplate(name.trim(), url.trim(), type);
+      const res = await createWebhookTemplate(
+        name.trim(),
+        url.trim(),
+        type,
+        type === "custom" ? body : ""
+      );
       setTemplates((prev) => [...prev, res.template]);
       setName("");
       setURL("");
       setType("generic");
+      setBody("");
       setInlineMessage("Template created.");
       setTimeout(() => setInlineMessage(""), 2000);
     } catch (err) {
@@ -95,7 +103,8 @@ export default function WebhooksPage({ user }) {
       <p class="text-xs text-slate-500 mb-3">
         Define reusable webhook endpoints once, then attach them to individual
         jobs on the Jobs page. Templates can target Slack, Discord, PagerDuty,
-        Microsoft Teams, or general JSON receivers.
+        Microsoft Teams, general JSON receivers, or anything else via a
+        custom Go template.
       </p>
 
       {/* Create template */}
@@ -143,6 +152,7 @@ export default function WebhooksPage({ user }) {
                 <option value="discord">Discord (content payload)</option>
                 <option value="pagerduty">PagerDuty (Events API v2)</option>
                 <option value="teams">Microsoft Teams (MessageCard)</option>
+                <option value="custom">Custom (Go template)</option>
               </select>
             </div>
           </div>
@@ -236,10 +246,75 @@ export default function WebhooksPage({ user }) {
             </div>
           )}
 
+          {type === "custom" && (
+            <div class="mt-2 text-[10px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p class="mb-1">
+                Write your own{" "}
+                <a
+                  href="https://pkg.go.dev/text/template"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="underline"
+                >
+                  Go <code class="font-mono text-[9px]">text/template</code>
+                </a>
+                . The rendered output is sent as-is as the POST body — it's
+                on you to produce whatever the receiver expects (usually
+                JSON). Available fields:{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  {`{{.text}}`}
+                </code>
+                ,{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  {`{{.event}}`}
+                </code>
+                ,{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  {`{{.job.name}}`}
+                </code>
+                ,{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  {`{{.job.severity}}`}
+                </code>
+                ,{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  {`{{.job.status}}`}
+                </code>
+                ,{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  {`{{.user.email}}`}
+                </code>{" "}
+                and{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  {`{{.sent_at}}`}
+                </code>
+                . Example:
+              </p>
+              <pre class="bg-white border border-slate-200 rounded px-2 py-1 font-mono text-[9px] whitespace-pre overflow-x-auto">
+{`{"alert": "{{.job.name}} ({{.job.severity}}) is {{.event}}", "by": "{{.user.email}}"}`}
+              </pre>
+              <label class="block text-[11px] text-slate-600 mt-2 mb-1">
+                Template body
+              </label>
+              <textarea
+                rows={4}
+                class="w-full px-2 py-1.5 rounded-lg bg-white border border-slate-300 text-[11px] font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder={`{"alert": "{{.job.name}} is {{.event}}"}`}
+                value={body}
+                onInput={(e) => setBody(e.target.value)}
+              />
+            </div>
+          )}
+
           <div class="flex items-center justify-between mt-2">
             <button
               type="submit"
-              disabled={saving || !name.trim() || !url.trim()}
+              disabled={
+                saving ||
+                !name.trim() ||
+                !url.trim() ||
+                (type === "custom" && !body.trim())
+              }
               class="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-60 shadow-sm"
             >
               {saving ? "Saving…" : "Add template"}
@@ -308,6 +383,8 @@ export default function WebhooksPage({ user }) {
                       ? "PagerDuty"
                       : tmpl.type === "teams"
                       ? "Teams"
+                      : tmpl.type === "custom"
+                      ? "Custom"
                       : "Generic JSON";
                   const typeClasses =
                     "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border " +
@@ -319,6 +396,8 @@ export default function WebhooksPage({ user }) {
                       ? "bg-emerald-50 border-emerald-200 text-emerald-700"
                       : tmpl.type === "teams"
                       ? "bg-blue-50 border-blue-200 text-blue-700"
+                      : tmpl.type === "custom"
+                      ? "bg-amber-50 border-amber-200 text-amber-700"
                       : "bg-slate-50 border-slate-200 text-slate-600");
 
                   return (

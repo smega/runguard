@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"text/template"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -247,19 +248,21 @@ func (a *App) sendJobWebhooksWithPayload(
 
 		// Determine template type: default to generic
 		tType := WebhookTemplateTypeGeneric
+		tBody := ""
 		if a.webhookTemplatesColl != nil {
 			if tmpl, err := a.findWebhookTemplateByURL(ctx, j.UserID, urlStr); err == nil && tmpl != nil {
 				if tmpl.Type != "" {
 					tType = tmpl.Type
 				}
+				tBody = tmpl.Body
 			}
 		}
 
 		// Build body based on template type (generic JSON vs Slack/Discord/
-		// PagerDuty/Teams). PagerDuty needs the configured URL too, since its
-		// routing key travels as a query parameter on that URL rather than
-		// in a separate field.
-		bodyBytes, err := buildWebhookBodyForType(tType, payload, urlStr)
+		// PagerDuty/Teams/custom). PagerDuty needs the configured URL too,
+		// since its routing key travels as a query parameter on that URL
+		// rather than in a separate field.
+		bodyBytes, err := buildWebhookBodyForType(tType, tBody, payload, urlStr)
 		if err != nil {
 			lastErr = err
 
@@ -305,7 +308,7 @@ func (a *App) sendJobWebhooksWithPayload(
 	return lastErr
 }
 
-func buildWebhookBodyForType(tType string, payload map[string]interface{}, urlStr string) ([]byte, error) {
+func buildWebhookBodyForType(tType string, templateBody string, payload map[string]interface{}, urlStr string) ([]byte, error) {
 	switch strings.ToLower(tType) {
 	case WebhookTemplateTypeSlack:
 		// For Slack: focus on "text"
@@ -428,6 +431,26 @@ func buildWebhookBodyForType(tType string, payload map[string]interface{}, urlSt
 			"text":     text,
 		}
 		return json.Marshal(body)
+
+	case WebhookTemplateTypeCustom:
+		// User-authored Go text/template, rendered against the same payload
+		// map the built-in formats above see (so {{.text}}, {{.job.name}},
+		// {{.job.severity}}, {{.user.email}}, {{.sent_at}}, etc. all work).
+		// The rendered output is sent as-is -- it's up to the template to
+		// produce valid JSON (or whatever the receiver expects), the same
+		// way a self-hosted webhook receiver would expect.
+		if strings.TrimSpace(templateBody) == "" {
+			return nil, fmt.Errorf("custom webhook template has no body configured")
+		}
+		tmpl, err := template.New("webhook").Parse(templateBody)
+		if err != nil {
+			return nil, fmt.Errorf("parse custom webhook template: %w", err)
+		}
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, payload); err != nil {
+			return nil, fmt.Errorf("execute custom webhook template: %w", err)
+		}
+		return buf.Bytes(), nil
 
 	default: // generic JSON
 		return json.Marshal(payload)

@@ -123,6 +123,24 @@ type Job struct {
 	// reconciled. Empty means "use ExpectedIntervalSecs/GraceSecs" (the
 	// original, still-default behavior).
 	CronExpr string `bson:"cron_expr,omitempty" json:"cron_expr,omitempty"`
+
+	// SilenceSchedules are recurring weekly silence windows (e.g. "every day
+	// 00:00-01:00", "Mondays 06:00-08:00 for deploys"), independent of the
+	// one-off MaintenanceUntil/MaintenanceMode silence above -- both are
+	// checked by jobIsSilenced. See silence_schedule.go.
+	SilenceSchedules []SilenceSchedule `bson:"silence_schedules,omitempty" json:"silence_schedules,omitempty"`
+}
+
+// SilenceSchedule is one recurring weekly window during which alerts for a
+// job are suppressed. Times are "HH:MM" in UTC (the same timezone the rest
+// of the app uses for scheduling/lateness). EndTime <= StartTime means the
+// window wraps past midnight (e.g. 23:00-01:00).
+type SilenceSchedule struct {
+	// Days: 0=Sunday .. 6=Saturday (matches time.Weekday). Empty/omitted
+	// means "every day".
+	Days      []int  `bson:"days,omitempty" json:"days,omitempty"`
+	StartTime string `bson:"start_time" json:"start_time"`
+	EndTime   string `bson:"end_time" json:"end_time"`
 }
 
 type Incident struct {
@@ -145,13 +163,18 @@ type Incident struct {
 }
 
 type WebhookTemplate struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	UserID    primitive.ObjectID `bson:"user_id" json:"user_id"`
-	Name      string             `bson:"name" json:"name"`
-	URL       string             `bson:"url" json:"url"`
-	Type      string             `bson:"type,omitempty" json:"type,omitempty"`
-	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
-	UpdatedAt time.Time          `bson:"updated_at" json:"updated_at"`
+	ID     primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID primitive.ObjectID `bson:"user_id" json:"user_id"`
+	Name   string             `bson:"name" json:"name"`
+	URL    string             `bson:"url" json:"url"`
+	Type   string             `bson:"type,omitempty" json:"type,omitempty"`
+	// Body is a Go text/template source, used only when Type ==
+	// WebhookTemplateTypeCustom. Its rendered output becomes the raw HTTP
+	// POST body verbatim (not re-marshaled as JSON) -- see
+	// buildWebhookBodyForType in alerts.go.
+	Body      string    `bson:"body,omitempty" json:"body,omitempty"`
+	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+	UpdatedAt time.Time `bson:"updated_at" json:"updated_at"`
 }
 
 type JobRun struct {

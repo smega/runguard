@@ -82,6 +82,9 @@ type updateJobRequest struct {
 	// CronExpr: nil = leave untouched, "" = clear back to interval mode,
 	// non-empty = validate and set as the job's schedule.
 	CronExpr *string `json:"cron_expr,omitempty"`
+	// SilenceSchedules: nil = leave untouched, non-nil (including an empty
+	// slice, to clear all) replaces the job's recurring silence windows.
+	SilenceSchedules *[]SilenceSchedule `json:"silence_schedules,omitempty"`
 }
 
 const (
@@ -104,14 +107,18 @@ func normalizeMaintenanceMode(raw string) (string, error) {
 }
 
 // jobIsSilenced reports whether alerts should currently be suppressed for
-// this job -- true for the two indefinite freeze modes, or for a plain
-// fixed-duration window that hasn't expired yet.
+// this job -- true for the two indefinite freeze modes, a plain
+// fixed-duration window that hasn't expired yet, or a recurring weekly
+// silence window (see silence_schedule.go) that currently applies.
 func jobIsSilenced(j *Job, now time.Time) bool {
 	switch j.MaintenanceMode {
 	case MaintenanceModeUntilSuccess, MaintenanceModeManual:
 		return true
 	}
-	return j.MaintenanceUntil != nil && !j.MaintenanceUntil.IsZero() && j.MaintenanceUntil.After(now)
+	if j.MaintenanceUntil != nil && !j.MaintenanceUntil.IsZero() && j.MaintenanceUntil.After(now) {
+		return true
+	}
+	return jobIsScheduleSilenced(j, now)
 }
 
 type jobResponse struct {
@@ -136,9 +143,10 @@ type jobResponse struct {
 	PublicEnabled bool   `json:"publicEnabled"`
 	PublicToken   string `json:"publicToken,omitempty"`
 
-	Severity         string     `json:"severity,omitempty"`
-	MaintenanceUntil *time.Time `json:"maintenance_until,omitempty"`
-	MaintenanceMode  string     `json:"maintenance_mode,omitempty"`
+	Severity         string            `json:"severity,omitempty"`
+	MaintenanceUntil *time.Time        `json:"maintenance_until,omitempty"`
+	MaintenanceMode  string            `json:"maintenance_mode,omitempty"`
+	SilenceSchedules []SilenceSchedule `json:"silence_schedules,omitempty"`
 }
 
 type jobRunResponse struct {
@@ -364,6 +372,7 @@ func (a *App) handleCreateJob(c *gin.Context) {
 		Severity:             job.Severity,
 		MaintenanceUntil:     job.MaintenanceUntil,
 		MaintenanceMode:      job.MaintenanceMode,
+		SilenceSchedules:     job.SilenceSchedules,
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"job": resp})
@@ -429,6 +438,7 @@ func (a *App) handleListJobs(c *gin.Context) {
 			Severity:             j.Severity,
 			MaintenanceUntil:     j.MaintenanceUntil,
 			MaintenanceMode:      j.MaintenanceMode,
+			SilenceSchedules:     j.SilenceSchedules,
 		})
 	}
 
@@ -500,6 +510,7 @@ func (a *App) handleGetJob(c *gin.Context) {
 		Severity:             job.Severity,
 		MaintenanceUntil:     job.MaintenanceUntil,
 		MaintenanceMode:      job.MaintenanceMode,
+		SilenceSchedules:     job.SilenceSchedules,
 	}
 
 	c.JSON(http.StatusOK, gin.H{"job": resp})
@@ -746,6 +757,14 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 			update["cron_expr"] = expr
 		}
 	}
+	if req.SilenceSchedules != nil {
+		schedules := *req.SilenceSchedules
+		if err := validateSilenceSchedules(schedules); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		update["silence_schedules"] = schedules
+	}
 
 	if len(update) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
@@ -791,6 +810,7 @@ func (a *App) handleUpdateJob(c *gin.Context) {
 		Severity:             job.Severity,
 		MaintenanceUntil:     job.MaintenanceUntil,
 		MaintenanceMode:      job.MaintenanceMode,
+		SilenceSchedules:     job.SilenceSchedules,
 	}
 
 	c.JSON(http.StatusOK, gin.H{"job": resp})

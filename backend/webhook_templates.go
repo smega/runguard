@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,10 @@ import (
 type createWebhookTemplateRequest struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
-	Type string `json:"type"` // "generic" | "slack" | "discord" | "pagerduty" | "teams" (optional)
+	Type string `json:"type"` // "generic" | "slack" | "discord" | "pagerduty" | "teams" | "custom" (optional)
+	// Body is a Go text/template source, required (and only used) when
+	// Type == "custom" -- see buildWebhookBodyForType in alerts.go.
+	Body string `json:"body,omitempty"`
 }
 
 func (a *App) handleListWebhookTemplates(c *gin.Context) {
@@ -79,6 +83,19 @@ func (a *App) handleCreateWebhookTemplate(c *gin.Context) {
 
 	tType := normalizeWebhookTemplateType(req.Type)
 
+	body := ""
+	if tType == WebhookTemplateTypeCustom {
+		body = req.Body
+		if strings.TrimSpace(body) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "body is required for a custom template"})
+			return
+		}
+		if _, err := template.New("webhook").Parse(body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid template: " + err.Error()})
+			return
+		}
+	}
+
 	now := time.Now().UTC()
 	tmpl := WebhookTemplate{
 		ID:        primitive.NewObjectID(),
@@ -86,6 +103,7 @@ func (a *App) handleCreateWebhookTemplate(c *gin.Context) {
 		Name:      name,
 		URL:       url,
 		Type:      tType,
+		Body:      body,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -147,6 +165,7 @@ const (
 	WebhookTemplateTypeDiscord   = "discord"
 	WebhookTemplateTypePagerDuty = "pagerduty"
 	WebhookTemplateTypeTeams     = "teams"
+	WebhookTemplateTypeCustom    = "custom"
 )
 
 func normalizeWebhookTemplateType(raw string) string {
@@ -160,6 +179,8 @@ func normalizeWebhookTemplateType(raw string) string {
 		return WebhookTemplateTypePagerDuty
 	case WebhookTemplateTypeTeams:
 		return WebhookTemplateTypeTeams
+	case WebhookTemplateTypeCustom:
+		return WebhookTemplateTypeCustom
 	case "", WebhookTemplateTypeGeneric:
 		fallthrough
 	default:

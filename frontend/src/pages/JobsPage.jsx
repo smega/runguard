@@ -102,6 +102,10 @@ export default function JobsPage({ user }) {
   const [runbookNotes, setRunbookNotes] = useState("");
   const [runbookSaving, setRunbookSaving] = useState(false);
 
+  // recurring silence schedule for detail job
+  const [silenceSchedules, setSilenceSchedules] = useState([]);
+  const [schedulesSaving, setSchedulesSaving] = useState(false);
+
   // toast notifications
   const [toasts, setToasts] = useState([]);
 
@@ -192,14 +196,50 @@ export default function JobsPage({ user }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showNewJobPanel]);
 
+  // Mirrors jobIsScheduleSilenced in backend/silence_schedule.go so the
+  // "Silenced" badge/filter agree with what the alert loop actually does.
+  const isScheduleActiveNow = (schedules) => {
+    if (!schedules || schedules.length === 0) return false;
+    const now = new Date();
+    const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const weekday = now.getUTCDay(); // 0=Sun..6=Sat, same convention as Go's time.Weekday
+    const toMinutes = (hhmm) => {
+      const parts = (hhmm || "").split(":");
+      const h = Number(parts[0]);
+      const m = Number(parts[1]);
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      return h * 60 + m;
+    };
+    const matchesDay = (days, day) =>
+      !days || days.length === 0 || days.includes(day);
+
+    return schedules.some((s) => {
+      const start = toMinutes(s.start_time);
+      const end = toMinutes(s.end_time);
+      if (start === null || end === null || start === end) return false;
+      if (start < end) {
+        return (
+          matchesDay(s.days, weekday) && nowMinutes >= start && nowMinutes < end
+        );
+      }
+      const prevWeekday = (weekday + 6) % 7;
+      return (
+        (matchesDay(s.days, weekday) && nowMinutes >= start) ||
+        (matchesDay(s.days, prevWeekday) && nowMinutes < end)
+      );
+    });
+  };
+
   const isJobSilenced = (job) => {
     if (job.maintenance_mode === "until_success" || job.maintenance_mode === "manual") {
       return true;
     }
     const raw = job.maintenance_until || job.maintenanceUntil;
-    if (!raw) return false;
-    const until = new Date(raw);
-    return !isNaN(until.getTime()) && until > new Date();
+    if (raw) {
+      const until = new Date(raw);
+      if (!isNaN(until.getTime()) && until > new Date()) return true;
+    }
+    return isScheduleActiveNow(job.silence_schedules);
   };
 
   // sync runbook state when detail job changes
@@ -207,11 +247,67 @@ export default function JobsPage({ user }) {
     if (detailJob) {
       setRunbookUrl(detailJob.runbook_url || "");
       setRunbookNotes(detailJob.notes || "");
+      setSilenceSchedules(detailJob.silence_schedules || []);
     } else {
       setRunbookUrl("");
       setRunbookNotes("");
+      setSilenceSchedules([]);
     }
   }, [detailJob]);
+
+  const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const addSilenceSchedule = () => {
+    setSilenceSchedules((prev) => [
+      ...prev,
+      { days: [], start_time: "00:00", end_time: "01:00" },
+    ]);
+  };
+  const removeSilenceSchedule = (idx) => {
+    setSilenceSchedules((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const updateSilenceSchedule = (idx, patch) => {
+    setSilenceSchedules((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s))
+    );
+  };
+  const toggleScheduleDay = (idx, day) => {
+    setSilenceSchedules((prev) =>
+      prev.map((s, i) => {
+        if (i !== idx) return s;
+        const days = s.days || [];
+        const has = days.includes(day);
+        return {
+          ...s,
+          days: has
+            ? days.filter((d) => d !== day)
+            : [...days, day].sort((a, b) => a - b),
+        };
+      })
+    );
+  };
+
+  const handleSaveSilenceSchedules = async () => {
+    if (!detailJob) return;
+    setSchedulesSaving(true);
+    setJobError("");
+    try {
+      const res = await updateJob(detailJob.id, {
+        silence_schedules: silenceSchedules,
+      });
+      setJobs((prev) =>
+        prev.map((j) => (j.id === detailJob.id ? res.job : j))
+      );
+      setDetailJob(res.job);
+      pushToast("success", "Recurring silence schedule saved.");
+    } catch (err) {
+      console.error(err);
+      setJobError(err.message || "Failed to save silence schedule.");
+      pushToast("error", err.message || "Failed to save silence schedule.");
+    } finally {
+      setSchedulesSaving(false);
+    }
+  };
 
   const loadJobs = async (silent = false) => {
     if (!silent) {
@@ -1383,12 +1479,14 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                                 ? "Silenced until next success"
                                 : job.maintenance_mode === "manual"
                                 ? "Silenced until unmuted"
-                                : rawJobMaintenance && (
+                                : rawJobMaintenance
+                                ? (
                                     <>
                                       Silenced until{" "}
                                       {formatShortDateTime(rawJobMaintenance)}
                                     </>
-                                  )}
+                                  )
+                                : "Silenced (recurring schedule)"}
                             </div>
                           )}
                         </td>
@@ -1842,6 +1940,116 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                     </div>
                   );
                 })()}
+
+                {/* Recurring silence schedule */}
+                <div class="bg-white border border-slate-200 rounded-lg p-2.5">
+                  <div class="flex items-center justify-between mb-1.5">
+                    <h3 class="text-[11px] font-semibold text-slate-900">
+                      Recurring silence schedule
+                    </h3>
+                    <div class="flex items-center gap-1.5">
+                      {isScheduleActiveNow(silenceSchedules) && (
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border bg-amber-50 border-amber-200 text-amber-700">
+                          <span class="w-1.5 h-1.5 rounded-full bg-current/60 mr-1" />
+                          Active now
+                        </span>
+                      )}
+                      <span class="text-[10px] text-slate-500">UTC</span>
+                    </div>
+                  </div>
+                  <p class="text-[10px] text-slate-500 mb-2">
+                    Alerts are suppressed automatically during these recurring
+                    windows (e.g. nightly maintenance, weekly deploys) —
+                    independent of the one-off silence above. Heartbeats and
+                    stats keep recording as normal.
+                  </p>
+
+                  {silenceSchedules.length === 0 && (
+                    <p class="text-[10px] text-slate-500 mb-2">
+                      No recurring windows configured.
+                    </p>
+                  )}
+
+                  <div class="space-y-2 mb-2">
+                    {silenceSchedules.map((s, idx) => (
+                      <div
+                        key={idx}
+                        class="border border-slate-200 rounded-lg p-2"
+                      >
+                        <div class="flex flex-wrap items-center gap-1 mb-1.5">
+                          {DAY_LABELS.map((label, day) => (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={() => toggleScheduleDay(idx, day)}
+                              class={
+                                "px-1.5 py-0.5 rounded text-[10px] border " +
+                                ((s.days || []).includes(day)
+                                  ? "bg-blue-600 border-blue-600 text-white"
+                                  : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50")
+                              }
+                            >
+                              {label}
+                            </button>
+                          ))}
+                          {(s.days || []).length === 0 && (
+                            <span class="text-[10px] text-slate-400 ml-1">
+                              (every day)
+                            </span>
+                          )}
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <input
+                            type="time"
+                            value={s.start_time || ""}
+                            onInput={(e) =>
+                              updateSilenceSchedule(idx, {
+                                start_time: e.target.value,
+                              })
+                            }
+                            class="px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          <span class="text-[10px] text-slate-500">to</span>
+                          <input
+                            type="time"
+                            value={s.end_time || ""}
+                            onInput={(e) =>
+                              updateSilenceSchedule(idx, {
+                                end_time: e.target.value,
+                              })
+                            }
+                            class="px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeSilenceSchedule(idx)}
+                            class="ml-auto px-2 py-1 rounded-full border border-red-200 text-[10px] text-red-600 hover:bg-red-50"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={addSilenceSchedule}
+                      class="px-2.5 py-1 rounded-full text-[10px] border border-slate-300 text-slate-700 hover:bg-slate-50"
+                    >
+                      + Add window
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveSilenceSchedules}
+                      disabled={schedulesSaving}
+                      class="px-3 py-1 rounded-full text-[10px] bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-60"
+                    >
+                      {schedulesSaving ? "Saving…" : "Save schedule"}
+                    </button>
+                  </div>
+                </div>
 
                 {/* Per-job run history export */}
                 <div class="bg-white border border-slate-200 rounded-lg p-2.5">

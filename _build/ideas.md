@@ -38,10 +38,11 @@ this replaces them). Tags:
   pre-existing bug found along the way: the jobs API response never
   actually included `severity` or `maintenance_until`, so the severity
   pill and "silenced" badge in the UI had no data to render.)
-- `[WORTH DOING]` Scheduled/recurring silence profiles ("mute every day
-  00:00-01:00", "Mondays 06:00-08:00 for deploys") — real improvement over
-  one-off silence windows, needs its own small scheduler. Good next-round
-  candidate.
+- `[DONE]` Scheduled/recurring silence profiles ("mute every day
+  00:00-01:00", "Mondays 06:00-08:00 for deploys") — `Job.SilenceSchedules`
+  (weekly day-of-week + HH:MM UTC windows, overnight wrap supported),
+  checked by `jobIsSilenced` alongside the existing one-off modes. Editable
+  per job from the Jobs detail panel.
 - `[NOT WORTH IT]` Follow-the-parent silence (auto-silence downstream jobs
   when an upstream job is in maintenance) — requires a job-dependency graph;
   clever but real scope for a narrow benefit.
@@ -58,11 +59,12 @@ this replaces them). Tags:
 - `[DONE]` PagerDuty (Events API v2, routing key via a URL query param,
   severity mapped, dedup_key per job — no resolve event yet) and Microsoft
   Teams (classic MessageCard) template types.
-- `[WORTH DOING]` Custom webhook payload templates (Go `text/template`) —
-  lets power users hit anything (OpsGenie, custom internal tools, etc.)
-  without RunGuard building a dedicated formatter for each one. Worth doing
-  once there are a couple more fixed formats already in place, as the
-  "escape hatch" rather than the first thing built.
+- `[DONE]` Custom webhook payload templates (Go `text/template`) — a
+  `"custom"` webhook template type with a user-authored template `Body`,
+  validated at creation time and rendered against the same payload fields
+  the built-in formats use (`{{.job.name}}`, `{{.job.severity}}`,
+  `{{.user.email}}`, etc.); the escape hatch for anything not already
+  covered by Slack/Discord/PagerDuty/Teams.
 - `[NOT WORTH IT]` Webhook DLQ + redrive — enterprise reliability-engineering
   scope; the existing retry + visible delivery log is proportionate here.
 - `[NOT WORTH IT]` SMS / phone-call alerting (Twilio, Nexmo) — real cost and

@@ -83,7 +83,7 @@ async function sendJson(url, method, body) {
 }
 
 export const listWebhookTemplates = () => getJson("/api/webhook-templates");
-export const createWebhookTemplate = (name, url) => sendJson("/api/webhook-templates", "POST", { name, url });
+export const createWebhookTemplate = (name, url, type = "generic", body = "") => sendJson("/api/webhook-templates", "POST", { name, url, type, body });
 export const deleteWebhookTemplate = (id) => sendJson(`/api/webhook-templates/${id}`, "DELETE", {});
 
 export const listProjects = () => request("/projects", { method: "GET" });
