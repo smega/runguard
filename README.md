@@ -1,3 +1,45 @@
+# Getting started (self-hosting)
+
+Prerequisites: Go 1.26+, Node 18+ (to build the frontend), and a MongoDB
+instance (Atlas or self-hosted). A Mailgun account is optional (needed only
+for email alerts/summaries).
+
+**Backend**
+
+```sh
+cd backend
+cp config.sample.yml config.yml
+# edit config.yml: mongo.uri, public_base_url, auth.jwt_secret,
+# admin.bootstrap_emails, mailgun (optional) -- every field is commented.
+go build -o runguard-server .
+./runguard-server
+```
+
+Listens on `server.addr` (default `:8888`). `config.yml` is gitignored —
+never commit it, it holds live secrets.
+
+**Frontend**
+
+```sh
+cd frontend
+cp .env.example .env
+# edit .env -- see src/siteConfig.js for what each VITE_* var controls.
+npm install
+npm run build
+```
+
+This produces a static `dist/` you serve with any web server/reverse proxy
+(nginx, Caddy, etc). The backend is API-only — point your proxy's `/api` and
+`/hb` paths at the backend process and everything else at `dist/`. There's no
+bundled reverse-proxy config in this repo. `_build/build_go.sh` and
+`build_preact.sh` are the author's own SSH-based deploy scripts (they assume
+a pre-existing `systemctl` service and your own SSH key) — adapt them,
+replace them with your own process manager, or just run the binary directly.
+
+**First admin account**: sign up normally through the web UI, then see
+"Admin access" below.
+
+
 # Agent (CLI)
 
 `runguard wrap -- your-command` captures stdout/stderr/exit code/duration and
@@ -32,28 +74,13 @@ The last remaining admin can't be demoted, so this can't lock you out.
 mongosh still works if you ever need it, but shouldn't be necessary anymore.)
 
 
-## Stripe billing
+## Limits
 
-RunGuard now supports long-term Stripe integration using:
-- Checkout Sessions for subscription signup
-- Billing Portal sessions for customer self-service
-- verified Stripe webhooks for subscription lifecycle updates
-
-Configure these fields in `backend/config.yml`:
-- `billing.stripe_secret_key`
-- `billing.webhook_secret`
-- `billing.success_url`
-- `billing.cancel_url`
-- `billing.portal_return_url`
-- `billing.plans[].stripe_price_id`
-
-Recommended Stripe webhook events:
-- `checkout.session.completed`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-- `invoice.payment_failed`
-- `invoice.paid`
+RunGuard isn't monetized — there's no plan/tier system, just an optional
+per-user cap. Set `limits.max_jobs_per_user` / `limits.max_projects_per_user`
+in `backend/config.yml` (0 or omitted = unlimited, the right value for a
+self-hosted instance). The author's own hosted instance sets these low
+purely to keep it small, not as a paid-tier upsell.
 
 
 ## Backups
