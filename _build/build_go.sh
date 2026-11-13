@@ -46,18 +46,21 @@ echo "Building backend..."
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go -C "$BUILD_DIR" build -v -ldflags="-s -w" -o ../runguard
 echo "Build completed."
 
-# stop existing service
-echo "Stopping existing runguard..."
-ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" "systemctl stop runguard.service"
-
-# upload backend binary
+# upload the new binary next to the running one first, so the service is only
+# down for the swap + restart, not for the whole upload (it used to be
+# stopped before a ~27 MB scp, i.e. several seconds of downtime per deploy)
 echo "Uploading new runguard binary..."
-scp -i "$SSH_KEY" runguard "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/runguard"
-ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" "chmod +x $REMOTE_DIR/runguard"
+scp -i "$SSH_KEY" runguard "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/runguard.new"
+ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" "chmod +x $REMOTE_DIR/runguard.new"
 
-# start service
-echo "Starting runguard..."
-ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" "systemctl daemon-reload && systemctl enable --now runguard.service"
+# swap (rename is atomic on the same filesystem) and restart
+echo "Swapping binary and restarting runguard..."
+ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" "mv -f $REMOTE_DIR/runguard.new $REMOTE_DIR/runguard && systemctl daemon-reload && systemctl enable runguard.service && systemctl restart runguard.service"
+
+# fail the deploy loudly if the new binary doesn't stay up
+sleep 3
+ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" "systemctl is-active --quiet runguard.service" \
+  || { echo "runguard failed to start after deploy, check: journalctl -u runguard" >&2; exit 1; }
 
 # cleanup
 echo "Cleaning up..."
