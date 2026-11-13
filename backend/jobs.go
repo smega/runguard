@@ -918,8 +918,17 @@ func (a *App) handleHeartbeat(c *gin.Context) {
 		ts = payload.Ts.UTC()
 	}
 
+	// Any other status counts as a plain ping. Generic senders post their own
+	// JSON here (e.g. Alertmanager's webhook body has "status": "firing" for
+	// its always-firing Watchdog), and storing that verbatim would leave a run
+	// that is neither ok nor fail and never resolves open incidents.
 	status := payload.Status
-	if status == "" {
+	switch status {
+	case "ok", "fail", "late":
+	default:
+		if status != "" {
+			log.Printf("heartbeat: unknown status %q for key=%s, treating as ok", status, key)
+		}
 		status = "ok"
 	}
 
