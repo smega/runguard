@@ -29,6 +29,13 @@ type accountResponse struct {
 }
 
 func accountResponseFromUser(a *App, u *User) accountResponse {
+	// Admins have no job/project limit (see handleCreateJob, handleAgentRegister,
+	// handleCreateProject). Report 0 ("unlimited") for them too, otherwise the
+	// frontend enforces the regular cap on its own and blocks admins anyway.
+	maxJobs, maxProjects := a.cfg.Limits.MaxJobsPerUser, a.cfg.Limits.MaxProjectsPerUser
+	if u.IsAdmin {
+		maxJobs, maxProjects = 0, 0
+	}
 	return accountResponse{
 		Email:                   u.Email,
 		SummaryEmailEnabled:     u.SummaryEmailEnabled,
@@ -36,8 +43,8 @@ func accountResponseFromUser(a *App, u *User) accountResponse {
 		SummaryLastSentAt:       u.SummaryLastSentAt,
 		WeeklySummaryEnabled:    u.WeeklySummaryEnabled,
 		WeeklySummaryLastSentAt: u.WeeklySummaryLastSentAt,
-		MaxJobs:                 a.cfg.Limits.MaxJobsPerUser,
-		MaxProjects:             a.cfg.Limits.MaxProjectsPerUser,
+		MaxJobs:                 maxJobs,
+		MaxProjects:             maxProjects,
 		IsAdmin:                 u.IsAdmin,
 	}
 }
