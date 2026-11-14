@@ -1,5 +1,6 @@
 // src/pages/PublicJobPage.jsx
 import { useEffect, useState } from "preact/hooks";
+import { formatDuration } from "../components/DurationInput.jsx";
 
 async function getJson(url) {
   const res = await fetch(url, { method: "GET" });
@@ -92,7 +93,7 @@ export default function PublicJobPage({ token }) {
               Interval
             </p>
             <p class="mt-1 text-slate-900">
-              Every {Math.round(job.expected_interval_seconds / 60)} min
+              Every {formatDuration(job.expected_interval_seconds)}
             </p>
           </div>
           <div>
@@ -100,7 +101,7 @@ export default function PublicJobPage({ token }) {
               Grace
             </p>
             <p class="mt-1 text-slate-900">
-              {Math.round(job.grace_seconds / 60)} min
+              {formatDuration(job.grace_seconds)}
             </p>
           </div>
           <div>

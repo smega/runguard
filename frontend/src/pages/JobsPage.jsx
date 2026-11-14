@@ -1,6 +1,7 @@
 // src/pages/JobsPage.jsx
 import { h } from "preact";
 import { useEffect, useState } from "preact/hooks";
+import DurationInput, { cronForInterval, formatDuration } from "../components/DurationInput.jsx";
 import {
   listJobs,
   createJob,
@@ -820,12 +821,8 @@ export default function JobsPage({ user }) {
     });
   };
 
-  const cronExpression = (job) => {
-    const minutes = Math.round(job.expected_interval_seconds / 60);
-    if (minutes === 60) return "0 * * * *";
-    if (minutes === 1440) return "0 3 * * *";
-    return `*/${minutes} * * * *`;
-  };
+  const cronExpression = (job) =>
+    cronForInterval(job.expected_interval_seconds / 60);
 
   const safeJobSlug = (job) => {
     return (
@@ -873,10 +870,11 @@ ExecStartPost=/usr/bin/curl -fsS "${url}"
 Description=Run ${detailJob.name} on schedule
 
 [Timer]
-OnCalendar=*:0/${Math.max(
+OnBootSec=5min
+OnUnitActiveSec=${Math.max(
           1,
           Math.round(detailJob.expected_interval_seconds / 60)
-        )}
+        )}min
 
 [Install]
 WantedBy=timers.target
@@ -1238,28 +1236,16 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
           ) : (
             <div>
               <label class="block text-xs text-slate-600 mb-1">
-                Expected interval (minutes)
+                Expected interval
               </label>
-              <input
-                type="number"
-                min="1"
-                class="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={intervalMinutes}
-                onInput={(e) => setIntervalMinutes(e.target.value)}
-              />
+              <DurationInput minutes={intervalMinutes} onChange={setIntervalMinutes} min="1" />
             </div>
           )}
           <div>
             <label class="block text-xs text-slate-600 mb-1">
-              Grace period (minutes)
+              Grace period
             </label>
-            <input
-              type="number"
-              min="0"
-              class="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={graceMinutes}
-              onInput={(e) => setGraceMinutes(e.target.value)}
-            />
+            <DurationInput minutes={graceMinutes} onChange={setGraceMinutes} min="0" />
           </div>
           <button
             type="submit"
@@ -1598,27 +1584,15 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                       <div class="mt-1 space-y-1.5 bg-white border border-slate-200 rounded-lg p-2">
                         <div>
                           <label class="block text-[10px] text-slate-500 mb-0.5">
-                            Interval (min)
+                            Interval
                           </label>
-                          <input
-                            type="number"
-                            min="1"
-                            class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={editInterval}
-                            onInput={(e) => setEditInterval(e.target.value)}
-                          />
+                          <DurationInput minutes={editInterval} onChange={setEditInterval} min="1" size="sm" />
                         </div>
                         <div>
                           <label class="block text-[10px] text-slate-500 mb-0.5">
-                            Grace (min)
+                            Grace
                           </label>
-                          <input
-                            type="number"
-                            min="0"
-                            class="w-full px-2 py-1 rounded bg-white border border-slate-300 text-[11px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={editGrace}
-                            onInput={(e) => setEditGrace(e.target.value)}
-                          />
+                          <DurationInput minutes={editGrace} onChange={setEditGrace} min="0" size="sm" />
                         </div>
                         <div>
                           <label class="block text-[10px] text-slate-500 mb-0.5">
@@ -1663,16 +1637,12 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                               {detailJob.cron_expr}
                             </span>{" "}
                             (UTC), grace{" "}
-                            {Math.round(detailJob.grace_seconds / 60)} min
+                            {formatDuration(detailJob.grace_seconds)}
                           </>
                         ) : (
                           <>
-                            Interval ~{" "}
-                            {Math.round(
-                              detailJob.expected_interval_seconds / 60
-                            )}{" "}
-                            min, grace{" "}
-                            {Math.round(detailJob.grace_seconds / 60)} min
+                            Every {formatDuration(detailJob.expected_interval_seconds)},
+                            grace {formatDuration(detailJob.grace_seconds)}
                           </>
                         )}
                       </div>
