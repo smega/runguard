@@ -26,6 +26,9 @@ type accountResponse struct {
 	MaxJobs     int  `json:"max_jobs"`
 	MaxProjects int  `json:"max_projects"`
 	IsAdmin     bool `json:"is_admin"`
+	// EmailUnverified: no alert/summary emails until the address is
+	// confirmed (see verify_email.go).
+	EmailUnverified bool `json:"email_unverified"`
 }
 
 func accountResponseFromUser(a *App, u *User) accountResponse {
@@ -46,6 +49,7 @@ func accountResponseFromUser(a *App, u *User) accountResponse {
 		MaxJobs:                 maxJobs,
 		MaxProjects:             maxProjects,
 		IsAdmin:                 u.IsAdmin,
+		EmailUnverified:         u.EmailUnverified,
 	}
 }
 

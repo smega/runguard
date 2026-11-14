@@ -28,6 +28,8 @@ export const me = () => request("/auth/me", { method: "GET" });
 export const logout = () => request("/auth/logout", { method: "POST" });
 export const requestMagicLink = (email) => request("/auth/magic/request", { method: "POST", body: JSON.stringify({ email }) });
 export const consumeMagicLink = (token) => request("/auth/magic/consume", { method: "POST", body: JSON.stringify({ token }) });
+export const verifyEmail = (token) => request("/auth/verify-email", { method: "POST", body: JSON.stringify({ token }) });
+export const resendVerificationEmail = () => request("/account/verify-email/resend", { method: "POST" });
 export const requestPasswordReset = (email) => request("/auth/password/reset/request", { method: "POST", body: JSON.stringify({ email }) });
 export const confirmPasswordReset = (token, password) => request("/auth/password/reset/confirm", { method: "POST", body: JSON.stringify({ token, password }) });
 

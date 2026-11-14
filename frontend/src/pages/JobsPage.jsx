@@ -2,6 +2,7 @@
 import { h } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import DurationInput, { cronForInterval, formatDuration } from "../components/DurationInput.jsx";
+import VerifyEmailBanner from "../components/VerifyEmailBanner.jsx";
 import {
   listJobs,
   createJob,
@@ -1113,6 +1114,7 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
 
   return (
     <div class="max-w-6xl mx-auto px-4 py-8">
+      <VerifyEmailBanner account={account} />
       <div class="flex items-start justify-between gap-3 mb-1">
         <h1 class="text-2xl font-semibold text-slate-900">Monitored jobs</h1>
         <button

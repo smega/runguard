@@ -84,6 +84,9 @@ func (a *App) sendDueSummaries() error {
 }
 
 func (a *App) sendUserDailySummary(ctx context.Context, u *User, now time.Time) error {
+	if !canEmail(u) {
+		return nil // address not verified yet, see verify_email.go
+	}
 	// 1) load user's jobs
 	jobsCur, err := a.jobsColl.Find(ctx, bson.M{
 		"user_id":    u.ID,
@@ -324,6 +327,9 @@ type weeklyJobStat struct {
 }
 
 func (a *App) sendUserWeeklySummary(ctx context.Context, u *User, now time.Time) error {
+	if !canEmail(u) {
+		return nil // address not verified yet, see verify_email.go
+	}
 	from := now.Add(-7 * 24 * time.Hour)
 
 	jobsCur, err := a.jobsColl.Find(ctx, bson.M{

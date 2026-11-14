@@ -11,6 +11,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 import SignupPage from "./pages/SignupPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import MagicPage from "./pages/MagicPage.jsx";
+import VerifyEmailPage from "./pages/VerifyEmailPage.jsx";
 import ResetRequestPage from "./pages/ResetRequestPage.jsx";
 import ResetPage from "./pages/ResetPage.jsx";
 import JobsPage from "./pages/JobsPage.jsx";
@@ -54,6 +55,7 @@ export default function App() {
           <SignupPage path="/signup" onSignup={handleAuth} user={user} />
           <ProfilePage path="/profile" user={user} onLogout={handleLogout} />
           <MagicPage path="/magic" onLogin={handleAuth} />
+          <VerifyEmailPage path="/verify-email" user={user} />
           <ResetRequestPage path="/reset-request" user={user} />
           <ResetPage path="/reset" onLogin={handleAuth} />
           <JobsPage path="/jobs" user={user} />

@@ -177,6 +177,10 @@ func (a *App) scanAndAlertLateJobs(ctx context.Context) error {
 }
 
 func (a *App) sendJobLateEmail(u *User, j *Job, now time.Time) error {
+	if !canEmail(u) {
+		log.Printf("[alerts] skipping late-job email for job %s: address not verified yet", j.Name)
+		return nil
+	}
 	subject := fmt.Sprintf("[RunGuard] Job late: %s", j.Name)
 	bodyText := fmt.Sprintf(
 		"RunGuard has detected that a monitored job is late.\n\n"+

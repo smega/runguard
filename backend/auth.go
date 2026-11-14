@@ -131,6 +131,7 @@ func (a *App) handleSignup(c *gin.Context) {
 		CreatedAt:           now,
 		SummaryEmailEnabled: true,
 		SummaryHourUTC:      8,
+		EmailUnverified:     true,
 	}
 	res, err := a.usersColl.InsertOne(ctx, user)
 	if err != nil {
@@ -152,6 +153,12 @@ func (a *App) handleSignup(c *gin.Context) {
 		if err != nil {
 			log.Printf("insert default project: %v", err)
 		}
+	}
+
+	// A failed send isn't fatal: the account works, and the user can resend
+	// from the app.
+	if err := a.sendVerificationEmail(ctx, &user); err != nil {
+		log.Printf("send verification mail: %v", err)
 	}
 
 	if err := a.setAuthCookie(c, user.ID.Hex(), user.TokenVersion); err != nil {
@@ -487,6 +494,9 @@ func (a *App) handleMagicConsume(c *gin.Context) {
 		log.Printf("update magic token: %v", err)
 	}
 
+	// Following a link sent to the address proves the user owns it.
+	a.markEmailVerified(ctx, t.UserID)
+
 	// load user
 	var user User
 	err = a.usersColl.FindOne(ctx, bson.M{"_id": t.UserID}).Decode(&user)
@@ -625,6 +635,8 @@ func (a *App) handlePasswordResetConfirm(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "db error"})
 		return
 	}
+	// The reset link went to the address, so it's verified now too.
+	a.markEmailVerified(ctx, t.UserID)
 
 	// mark token used
 	_, err = a.tokensColl.UpdateByID(ctx, t.ID, bson.M{

@@ -1,5 +1,6 @@
 import { route } from "preact-router";
 import { useEffect, useState } from "preact/hooks";
+import VerifyEmailBanner from "../components/VerifyEmailBanner.jsx";
 import { getAccount, getAgentToken, logoutAllDevices, regenerateAgentToken, updateAccount } from "../api.js";
 import { showToast } from "../components/Toast.jsx";
 
@@ -138,6 +139,7 @@ export default function AccountPage({ user, onLogout }) {
         <p class="text-sm text-slate-500">Usage limits, exports, and summary email settings for your RunGuard workspace.</p>
       </div>
       {accountError && <div class="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{accountError}</div>}
+      <VerifyEmailBanner account={account} />
 
       <div class="grid gap-4 md:grid-cols-2">
         <section class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">

@@ -37,6 +37,14 @@ type User struct {
 	WeeklySummaryLastSentAt *time.Time `bson:"weekly_summary_last_sent_at,omitempty" json:"weekly_summary_last_sent_at,omitempty"`
 	IsAdmin                 bool       `bson:"is_admin,omitempty" json:"is_admin"`
 
+	// EmailUnverified is set on signup and cleared once the user proves they
+	// own the address (verification link, magic link or password reset).
+	// While set, RunGuard sends no alert or summary emails to the address,
+	// so nobody can sign a stranger up for daily mail. Stored as "unverified"
+	// rather than "verified" so accounts from before this existed (no field)
+	// count as verified.
+	EmailUnverified bool `bson:"email_unverified,omitempty" json:"email_unverified"`
+
 	// TokenVersion is embedded in issued JWTs. Bumping it (e.g. on password
 	// change or an explicit "log out everywhere") immediately invalidates
 	// every previously issued token, since authMiddleware rejects any token

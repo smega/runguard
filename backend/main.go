@@ -196,6 +196,8 @@ func main() {
 
 		auth.POST("/password/reset/request", rateLimitByIP(5, 5), app.handlePasswordResetRequest)
 		auth.POST("/password/reset/confirm", rateLimitByIP(10, 10), app.handlePasswordResetConfirm)
+
+		auth.POST("/verify-email", rateLimitByIP(10, 10), app.handleVerifyEmail)
 	}
 
 	account := api.Group("/account").Use(app.authMiddleware())
@@ -203,6 +205,8 @@ func main() {
 		account.GET("", app.handleGetAccount)
 		account.PATCH("", app.handleUpdateAccount)
 		account.POST("/logout-all", app.handleLogoutAllDevices)
+		// Low limit: every call sends an email.
+		account.POST("/verify-email/resend", rateLimitByIP(2, 3), app.handleResendVerification)
 
 		// Agent token: lets the CLI self-register jobs without the account
 		// owner needing to create a heartbeat key by hand first. Viewed and
