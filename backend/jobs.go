@@ -187,12 +187,22 @@ type publicJobResponse struct {
 	ExpectedIntervalSecs int        `json:"expected_interval_seconds"`
 	GraceSecs            int        `json:"grace_seconds"`
 	LastHeartbeatAt      *time.Time `json:"last_heartbeat_at,omitempty"`
-	Uptime7d             struct {
+	// Status only says whether heartbeats arrive on time; LastRun says
+	// whether the last one reported success (a job can be on time and failing).
+	LastRun  *publicLastRun `json:"last_run,omitempty"`
+	Uptime7d struct {
 		Ok        int     `json:"ok"`
 		Late      int     `json:"late"`
+		Fail      int     `json:"fail"`
 		Total     int     `json:"total"`
 		PercentOk float64 `json:"percentOk"`
 	} `json:"uptime7d"`
+}
+
+type publicLastRun struct {
+	Status     string    `json:"status"`
+	At         time.Time `json:"at"`
+	DurationMs int64     `json:"duration_ms"`
 }
 
 // ---------- Log tails + webhook logs ----------
@@ -1289,8 +1299,19 @@ func (a *App) handlePublicJob(c *gin.Context) {
 	resp.LastHeartbeatAt = job.LastHeartbeatAt
 	resp.Uptime7d.Ok = w.Ok
 	resp.Uptime7d.Late = w.Late
+	resp.Uptime7d.Fail = w.Fail
 	resp.Uptime7d.Total = w.Total
 	resp.Uptime7d.PercentOk = w.UptimePercent
+
+	var last JobRun
+	err = a.jobRunsColl.FindOne(ctx, bson.M{"job_id": job.ID, "user_id": job.UserID},
+		options.FindOne().SetSort(bson.D{{Key: "at", Value: -1}})).Decode(&last)
+	switch {
+	case err == nil:
+		resp.LastRun = &publicLastRun{Status: last.Status, At: last.At, DurationMs: last.DurationMs}
+	case !errors.Is(err, mongo.ErrNoDocuments):
+		log.Printf("public job last run: %v", err)
+	}
 
 	c.JSON(http.StatusOK, resp)
 }
