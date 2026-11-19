@@ -2280,7 +2280,14 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                                 : tmpl.url;
 
                             const typeLabel =
-                              tmpl.type === "slack" ? "Slack" : "Generic JSON";
+                              {
+                                slack: "Slack",
+                                discord: "Discord",
+                                pagerduty: "PagerDuty",
+                                teams: "Teams",
+                                ntfy: "ntfy",
+                                custom: "Custom",
+                              }[tmpl.type] || "Generic JSON";
                             const typeClasses =
                               "inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] border " +
                               (tmpl.type === "slack"
