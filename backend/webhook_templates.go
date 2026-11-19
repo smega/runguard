@@ -166,6 +166,7 @@ const (
 	WebhookTemplateTypePagerDuty = "pagerduty"
 	WebhookTemplateTypeTeams     = "teams"
 	WebhookTemplateTypeCustom    = "custom"
+	WebhookTemplateTypeNtfy      = "ntfy"
 )
 
 func normalizeWebhookTemplateType(raw string) string {
@@ -181,6 +182,8 @@ func normalizeWebhookTemplateType(raw string) string {
 		return WebhookTemplateTypeTeams
 	case WebhookTemplateTypeCustom:
 		return WebhookTemplateTypeCustom
+	case WebhookTemplateTypeNtfy:
+		return WebhookTemplateTypeNtfy
 	case "", WebhookTemplateTypeGeneric:
 		fallthrough
 	default:

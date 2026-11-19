@@ -208,6 +208,7 @@ func (a *App) sendJobLateWebhooks(ctx context.Context, u *User, j *Job, now time
 	}
 
 	payload := map[string]interface{}{
+		"title": fmt.Sprintf("%s is late", j.Name),
 		"text": fmt.Sprintf(
 			"RunGuard: job '%s' for %s is late. Last heartbeat: %s UTC.",
 			j.Name,
@@ -283,7 +284,7 @@ func (a *App) sendJobWebhooksWithPayload(
 		}
 
 		start := time.Now()
-		code, postErr := postJSONWithStatus(ctx, urlStr, bodyBytes)
+		code, postErr := postJSONWithStatus(ctx, webhookPostURL(tType, urlStr), bodyBytes)
 		durationMs := time.Since(start).Milliseconds()
 
 		if postErr != nil {
@@ -314,6 +315,8 @@ func (a *App) sendJobWebhooksWithPayload(
 
 func buildWebhookBodyForType(tType string, templateBody string, payload map[string]interface{}, urlStr string) ([]byte, error) {
 	switch strings.ToLower(tType) {
+	case WebhookTemplateTypeNtfy:
+		return buildNtfyBody(payload, urlStr)
 	case WebhookTemplateTypeSlack:
 		// For Slack: focus on "text"
 		var text string
@@ -517,4 +520,66 @@ func postJSONOnce(ctx context.Context, url string, body []byte) (int, error) {
 		return resp.StatusCode, fmt.Errorf("webhook non-2xx: %s", resp.Status)
 	}
 	return resp.StatusCode, nil
+}
+
+// notifyJobFailed tells a job's channels that a run reported failure
+// (a "fail" heartbeat). That heartbeat still counts as one, so a job that
+// keeps failing is never late, and without this nobody would hear about it
+// at all: an outside-in probe that reaches the site but finds it broken
+// would report "fail" every few minutes in silence. Same silences and
+// cooldown as a late job; the cooldown ends with the next "ok" heartbeat.
+func (a *App) notifyJobFailed(ctx context.Context, j *Job, now time.Time, detail string) {
+	if !a.cfg.Alerts.Enabled || jobIsSilenced(j, now) {
+		return
+	}
+	cooldown := time.Duration(a.cfg.Alerts.CooldownSeconds) * time.Second
+	if j.LastAlertSentAt != nil && now.Sub(*j.LastAlertSentAt) < cooldown {
+		return
+	}
+	hasEmail := a.cfg.Mailgun.Enabled && j.AlertEmailEnabled
+	hasWebhooks := j.AlertWebhookEnabled && len(j.AlertWebhookURLs) > 0
+	if !hasEmail && !hasWebhooks {
+		return
+	}
+	var u User
+	if err := a.usersColl.FindOne(ctx, bson.M{"_id": j.UserID}).Decode(&u); err != nil {
+		log.Printf("[alerts] find user for failed job %s: %v", j.ID.Hex(), err)
+		return
+	}
+	if len(detail) > 500 {
+		detail = detail[:500] + "..."
+	}
+	text := fmt.Sprintf("RunGuard: job '%s' reported a failure.", j.Name)
+	if detail != "" {
+		text += "\n" + detail
+	}
+	log.Printf("[alerts] job %s (%s) reported a failure; notifying", j.ID.Hex(), j.Name)
+
+	if hasEmail && canEmail(&u) {
+		subject := fmt.Sprintf("[RunGuard] Job failed: %s", j.Name)
+		if err := a.sendMail(u.Email, subject, text+"\n", ""); err != nil {
+			log.Printf("[alerts] send failure email for job %s: %v", j.ID.Hex(), err)
+		}
+	}
+	if hasWebhooks {
+		payload := map[string]interface{}{
+			"title": fmt.Sprintf("%s failed", j.Name),
+			"text":  text,
+			"event": "job_failed",
+			"job": map[string]interface{}{
+				"id":       j.ID.Hex(),
+				"name":     j.Name,
+				"status":   "fail",
+				"severity": normalizeSeverity(j.Severity),
+			},
+			"user":    map[string]interface{}{"email": u.Email},
+			"sent_at": now.UTC().Format(time.RFC3339),
+		}
+		if err := a.sendJobWebhooksWithPayload(ctx, &u, j, payload); err != nil {
+			log.Printf("[alerts] send failure webhooks for job %s: %v", j.ID.Hex(), err)
+		}
+	}
+	if _, err := a.jobsColl.UpdateByID(ctx, j.ID, bson.M{"$set": bson.M{"last_alert_sent_at": now}}); err != nil {
+		log.Printf("[alerts] update last_alert_sent_at for job %s: %v", j.ID.Hex(), err)
+	}
 }

@@ -946,8 +946,11 @@ func (a *App) handleHeartbeat(c *gin.Context) {
 		"last_heartbeat_at": now,
 		"updated_at":        now,
 	}
-	unsetFields := bson.M{
-		"last_alert_sent_at": "",
+	// An "ok" ends an alert's cooldown; a "fail" keeps it, so a job that
+	// fails on every run is announced once per cooldown, not every run.
+	unsetFields := bson.M{}
+	if status == "ok" {
+		unsetFields["last_alert_sent_at"] = ""
 	}
 
 	// A job frozen "until first success" exists precisely so nobody has to
@@ -958,10 +961,11 @@ func (a *App) handleHeartbeat(c *gin.Context) {
 		unsetFields["maintenance_until"] = ""
 	}
 
-	_, err = a.jobsColl.UpdateByID(ctx, job.ID, bson.M{
-		"$set":   setFields,
-		"$unset": unsetFields,
-	})
+	update := bson.M{"$set": setFields}
+	if len(unsetFields) > 0 {
+		update["$unset"] = unsetFields
+	}
+	_, err = a.jobsColl.UpdateByID(ctx, job.ID, update)
 	if err != nil {
 		log.Printf("update last heartbeat: %v", err)
 		c.Status(http.StatusInternalServerError)
@@ -990,6 +994,16 @@ func (a *App) handleHeartbeat(c *gin.Context) {
 		_ = a.resolveOpenIncidents(ctx, &job, now)
 	} else if status == "fail" {
 		_ = a.openOrRefreshIncident(ctx, &job, IncidentKindFail, "Run reported failure via heartbeat payload.", status, now)
+		detail := strings.TrimSpace(payload.StderrTail)
+		if detail == "" {
+			detail = strings.TrimSpace(payload.StdoutTail)
+		}
+		// Off the request: the agent shouldn't wait for webhooks and mail.
+		go func(j Job) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			a.notifyJobFailed(ctx, &j, now, detail)
+		}(job)
 	}
 
 	c.Status(http.StatusNoContent)

@@ -15,7 +15,7 @@ export default function DocsPage() {
         <p>1. Create a project for a service or environment.</p>
         <p>2. Add a job with a realistic schedule (a fixed interval, or a cron expression) and grace window.</p>
         <p>3. Send a test heartbeat — with a plain <code>curl</code> or the CLI — and confirm it appears in the dashboard.</p>
-        <p>4. Add an email and/or webhook alert destination (Slack, Discord, PagerDuty, or Teams).</p>
+        <p>4. Add an email and/or webhook alert destination (Slack, Discord, PagerDuty, Teams, or ntfy).</p>
         <p>5. Simulate a failure and then a healthy recovery to see both alert paths.</p>
       </div>
 
@@ -88,8 +88,9 @@ runguard self-update`}
       <section class="space-y-3">
         <h2 class="text-lg font-semibold text-slate-900">Alert destinations</h2>
         <p>
-          Add email alerts, or a webhook pointed at Slack, Discord, PagerDuty, or Microsoft Teams —
-          RunGuard formats the payload for whichever type you choose. You can also enable a weekly
+          Add email alerts, or a webhook pointed at Slack, Discord, PagerDuty, Microsoft Teams or
+          ntfy. RunGuard formats the payload for whichever type you choose. Alerts go out when a job
+          is late and when a run reports a failure. You can also enable a weekly
           summary email covering what ran, what failed, and current uptime per job.
         </p>
       </section>

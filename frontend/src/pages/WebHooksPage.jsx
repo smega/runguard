@@ -103,7 +103,7 @@ export default function WebhooksPage({ user }) {
       <p class="text-xs text-slate-500 mb-3">
         Define reusable webhook endpoints once, then attach them to individual
         jobs on the Jobs page. Templates can target Slack, Discord, PagerDuty,
-        Microsoft Teams, general JSON receivers, or anything else via a
+        Microsoft Teams, ntfy, general JSON receivers, or anything else via a
         custom Go template.
       </p>
 
@@ -152,6 +152,7 @@ export default function WebhooksPage({ user }) {
                 <option value="discord">Discord (content payload)</option>
                 <option value="pagerduty">PagerDuty (Events API v2)</option>
                 <option value="teams">Microsoft Teams (MessageCard)</option>
+                <option value="ntfy">ntfy (push to your phone)</option>
                 <option value="custom">Custom (Go template)</option>
               </select>
             </div>
@@ -198,6 +199,30 @@ export default function WebhooksPage({ user }) {
                 </code>{" "}
                 message the same way Slack templates do, trimmed to Discord's
                 2000-character limit if needed.
+              </p>
+            </div>
+          )}
+
+          {type === "ntfy" && (
+            <div class="mt-2 text-[10px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <p class="mb-1">
+                Use your topic's URL, the same one you would subscribe to in the
+                ntfy app, for example:
+              </p>
+              <pre class="bg-white border border-slate-200 rounded px-2 py-1 font-mono text-[9px] whitespace-pre overflow-x-auto">
+{`https://ntfy.sh/your-long-random-topic`}
+              </pre>
+              <p class="mt-1">
+                RunGuard sends a notification with a title ("backup is late",
+                "backup failed"), the details as the message, and a priority
+                from the job's severity (critical 5, high 4, normal 3, low 2).
+                A self-hosted server works the same way; an access token can go
+                on the URL as{" "}
+                <code class="font-mono text-[9px] bg-white border border-slate-200 rounded px-1 py-0.5">
+                  ?auth=...
+                </code>
+                . Anyone who knows a topic on ntfy.sh can read it, so pick a long
+                random name.
               </p>
             </div>
           )}

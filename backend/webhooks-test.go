@@ -62,6 +62,7 @@ func (a *App) handleTestJobWebhooks(c *gin.Context) {
 	status := computeJobStatus(&job, now)
 
 	payload := map[string]interface{}{
+		"title": fmt.Sprintf("Test: %s", job.Name),
 		"text": fmt.Sprintf(
 			"RunGuard: test webhook for job '%s' (%s). No action required.",
 			job.Name,
