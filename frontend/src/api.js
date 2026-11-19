@@ -75,6 +75,16 @@ export async function testJobWebhooks(jobId) {
   return data || {};
 }
 
+// Replaces the job's heartbeat key; the old /hb/ URL stops working at once.
+export async function regenerateJobKey(jobId) {
+  const res = await fetch(`/api/jobs/${jobId}/regenerate-key`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include" });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch {}
+  if (!res.ok) throw new Error((data && (data.error || data.detail)) || text || `HTTP ${res.status}`);
+  return data || {};
+}
+
 async function sendJson(url, method, body) {
   const res = await fetch(url, { method, credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const text = await res.text();

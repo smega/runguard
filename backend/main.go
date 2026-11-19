@@ -273,6 +273,7 @@ func main() {
 		jobs.GET("/:id/stats", app.handleJobStats)
 
 		jobs.POST("/:id/public", app.handleToggleJobPublic)
+		jobs.POST("/:id/regenerate-key", rateLimitByIP(5, 5), app.handleRegenerateJobKey)
 
 		// NEW: webhook logs for a job
 		jobs.GET("/:id/webhook-logs", app.handleJobWebhookLogs)

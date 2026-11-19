@@ -16,6 +16,7 @@ import {
   testJobWebhooks,
   listWebhookTemplates,
   listProjects,
+  regenerateJobKey,
 } from "../api.js";
 import { PUBLIC_STATUS_BASE_URL } from "../siteConfig";
 
@@ -63,6 +64,8 @@ export default function JobsPage({ user }) {
 
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [confirmRegenId, setConfirmRegenId] = useState(null);
+  const [regeneratingKeyId, setRegeneratingKeyId] = useState(null);
 
   const [statusFilter, setStatusFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
@@ -537,6 +540,34 @@ export default function JobsPage({ user }) {
       pushToast("error", err.message || "Failed to update webhook alerts.");
     } finally {
       setTogglingWebhookId(null);
+    }
+  };
+
+  // Two clicks, like delete: the old heartbeat URL stops working at once,
+  // so whatever pings it fails until it's switched to the new one.
+  const handleRegenerateKeyClick = async (job) => {
+    if (confirmRegenId !== job.id) {
+      setConfirmRegenId(job.id);
+      setTimeout(() => {
+        setConfirmRegenId((current) => (current === job.id ? null : current));
+      }, 4000);
+      return;
+    }
+    setConfirmRegenId(null);
+    setRegeneratingKeyId(job.id);
+    try {
+      const res = await regenerateJobKey(job.id);
+      const update = (j) => (j.id === job.id ? { ...j, heartbeat_url: res.heartbeat_url } : j);
+      setJobs((prev) => prev.map(update));
+      if (detailJob && detailJob.id === job.id) {
+        setDetailJob((prev) => (prev ? update(prev) : prev));
+      }
+      pushToast("success", "New heartbeat URL. The old one no longer works: update whatever pings it.");
+    } catch (err) {
+      console.error(err);
+      pushToast("error", err.message || "Failed to regenerate the heartbeat key.");
+    } finally {
+      setRegeneratingKeyId(null);
     }
   };
 
@@ -1576,6 +1607,22 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                     <div class="text-[10px] text-slate-500 font-mono break-all">
                       {detailJob.heartbeat_url}
                     </div>
+                    <button
+                      type="button"
+                      class={
+                        "mt-1 text-[10px] underline disabled:opacity-50 " +
+                        (confirmRegenId === detailJob.id ? "text-red-600 font-semibold" : "text-slate-500 hover:text-slate-700")
+                      }
+                      disabled={regeneratingKeyId === detailJob.id}
+                      onClick={() => handleRegenerateKeyClick(detailJob)}
+                      title="Use this if the URL leaked. The old URL stops working immediately."
+                    >
+                      {regeneratingKeyId === detailJob.id
+                        ? "Regenerating…"
+                        : confirmRegenId === detailJob.id
+                        ? "Click again: the old URL stops working"
+                        : "Regenerate URL"}
+                    </button>
                     <div class="text-[10px] text-slate-500 mt-1">
                       Last heartbeat:{" "}
                       <span class="text-slate-700">
