@@ -94,12 +94,10 @@ func (a *App) scanAndAlertLateJobs(ctx context.Context) error {
 			continue
 		}
 
-		// Determine channels for this job
+		// Determine channels for this job. A job without any is still
+		// checked: its lateness is recorded below, only nobody is told.
 		hasEmail := a.cfg.Mailgun.Enabled && j.AlertEmailEnabled
 		hasWebhooks := j.AlertWebhookEnabled && len(j.AlertWebhookURLs) > 0
-		if !hasEmail && !hasWebhooks {
-			continue
-		}
 
 		// jobLateness handles both plain interval+grace jobs and
 		// cron-scheduled jobs (Job.CronExpr) uniformly -- see cron.go.
@@ -133,6 +131,21 @@ func (a *App) scanAndAlertLateJobs(ctx context.Context) error {
 		a.insertJobRun(ctx, &j, "late", now, lateBy)
 		if err := a.openOrRefreshIncident(ctx, &j, IncidentKindLate, "Job missed its expected heartbeat window.", "late", now); err != nil {
 			log.Printf("[alerts] open incident for job %s: %v", j.ID.Hex(), err)
+		}
+
+		if !hasEmail && !hasWebhooks {
+			// Recorded, nobody to tell. last_alert_sent_at still gates the
+			// next late run the same way the cooldown does for alerts.
+			log.Printf(
+				"[alerts] job %s (%s) is late by %s; no alert channel, recorded only",
+				j.ID.Hex(), j.Name, lateBy,
+			)
+			if _, err := a.jobsColl.UpdateByID(ctx, j.ID, bson.M{
+				"$set": bson.M{"last_alert_sent_at": now, "updated_at": now},
+			}); err != nil {
+				log.Printf("[alerts] update last_alert_sent_at for job %s: %v", j.ID.Hex(), err)
+			}
+			continue
 		}
 
 		log.Printf(

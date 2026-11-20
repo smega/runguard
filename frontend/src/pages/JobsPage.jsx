@@ -1733,6 +1733,15 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                           : "Webhooks off"}
                       </button>
                     </div>
+                    {/* "On" with nowhere to send looks fine and alerts nobody. */}
+                    {!detailJob.alert_email_enabled &&
+                      jobWebhookUrls(detailJob).length === 0 && (
+                        <p class="mt-1 text-[10px] text-amber-700">
+                          This job can't notify anyone: email is off and no
+                          webhook is attached. Late and failed runs are only
+                          recorded.
+                        </p>
+                      )}
                     <div class="mt-1 flex items-center gap-2">
                       <span class="text-[10px] text-slate-500">Severity:</span>
                       {renderSeverityPill(detailJob.severity)}
@@ -2227,7 +2236,12 @@ exec("/opt/scripts/${slug}.sh", async (err) => {
                     <h3 class="text-[11px] font-semibold text-slate-900">
                       Webhook endpoints
                     </h3>
-                    {detailJob.alert_webhook_enabled ? (
+                    {detailJob.alert_webhook_enabled &&
+                    jobWebhookUrls(detailJob).length === 0 ? (
+                      <span class="text-[10px] text-amber-700">
+                        Webhooks on, none attached
+                      </span>
+                    ) : detailJob.alert_webhook_enabled ? (
                       <span class="text-[10px] text-emerald-700">
                         Webhooks on
                       </span>
